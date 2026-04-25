@@ -5,21 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>我的巴士站牌</title>
     <style>
-        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --bg-color: #000; }
+        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --ctb-color: #fbca06; --bg-color: #000; }
         body { background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 15px; }
         .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
         #settings-btn { font-size: 24px; background: none; border: none; color: #fff; cursor: pointer; }
         .card { border-left: 8px solid var(--kmb-color); background: #1a1a1a; margin: 15px 0; padding: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 12px; }
         .gmb-card { border-left-color: var(--gmb-color); }
+        .ctb-card { border-left-color: #0055ad; } /* 城巴用藍色邊條 */
         .route-num { font-size: 42px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
         .gmb-card .route-num { color: var(--gmb-color); }
+        .ctb-card .route-num { color: #fbca06; }
         .dest { font-size: 16px; color: #aaa; margin-top: 5px; display: block; }
         .eta-box { text-align: right; min-width: 100px; }
         .eta-min { font-size: 45px; font-weight: bold; color: #fff; line-height: 1; }
-        .eta-unit { font-size: 16px; margin-left: 4px; }
         .status-msg { font-size: 22px; color: #ff3b30; font-weight: bold; }
         #settings-panel { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #222; z-index: 100; padding: 20px; box-sizing: border-box; overflow-y: auto; }
-        #debug-log { height: 100px; background: #111; color: #00ff00; font-size: 11px; font-family: monospace; padding: 10px; border-radius: 8px; overflow-y: auto; margin-top: 20px; border: 1px solid #333; }
+        #debug-log { height: 80px; background: #111; color: #00ff00; font-size: 11px; font-family: monospace; padding: 10px; border-radius: 8px; overflow-y: auto; margin-top: 10px; border: 1px solid #333; }
         input, select { width: 100%; padding: 12px; margin: 8px 0; background: #333; border: 1px solid #444; color: #fff; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
         .save-btn { background: #28a745; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-size: 18px; margin-top: 10px; cursor: pointer; }
     </style>
@@ -27,7 +28,7 @@
 <body>
 
 <div class="header">
-    <h2 style="margin:0">🚍 實時站牌</h2>
+    <h2 style="margin:0">🚍 實時站牌 (同步版)</h2>
     <button id="settings-btn" onclick="toggleSettings()">⚙️</button>
 </div>
 
@@ -38,45 +39,55 @@
     <h3 style="margin-top:0">管理路線</h3>
     <div id="route-list"></div>
     <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
-    <h4>新增路線</h4>
+    <h4>新增本機臨時路線</h4>
     <select id="new-type">
         <option value="KMB">九巴 (KMB)</option>
+        <option value="CTB">城巴 (Citybus)</option>
         <option value="GMB">小巴 (GMB)</option>
     </select>
-    <input type="text" id="new-route" placeholder="路線 (如 98D / 105)">
-    <input type="text" id="new-stop" placeholder="站點 ID (從 hkbus.app 搵)">
-    <div id="gmb-extra" style="display:none">
-        <input type="text" id="new-route-id" placeholder="小巴 Route ID (105係2006606)">
-    </div>
-    <div id="kmb-extra">
+    <input type="text" id="new-route" placeholder="路線 (如 798 / 98D)">
+    <input type="text" id="new-stop" placeholder="站點 ID">
+    <div id="extra-fields">
+        <input type="text" id="new-route-id" style="display:none" placeholder="小巴 Route ID (105係2006606)">
         <select id="new-dir">
             <option value="O">去程 (Outbound)</option>
             <option value="I">回程 (Inbound)</option>
         </select>
     </div>
-    <button class="save-btn" onclick="addRoute()">確認新增</button>
-    <button onclick="toggleSettings()" style="width:100%; margin-top:10px; padding:10px; background:#555; color:#fff; border:none; border-radius:8px; cursor:pointer;">返回首頁</button>
+    <button class="save-btn" onclick="addRoute()">加入本機清單</button>
+    <button onclick="toggleSettings()" style="width:100%; margin-top:10px; padding:10px; background:#555; color:#fff; border:none; border-radius:8px;">返回首頁</button>
 </div>
 
 <script>
-    let configs = JSON.parse(localStorage.getItem('bus_configs')) || [];
+    // ==========================================
+    // 📌 已釘死固定路線 (雲端同步區)
+    // ==========================================
+    const SYNC_CONFIGS = [
+        { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
+        { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
+        { type: 'CTB', route: '694', stop_id: '001684', dir: 'I' },
+        { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I' },
+        { type: 'GMB', route: '105', route_id: '2006606', stop_id: '2001584' },
+        { type: 'CTB', route: '798', stop_id: '001760', dir: 'O' }
+    ];
+
+    let localConfigs = JSON.parse(localStorage.getItem('bus_configs')) || [];
+    let configs = [...SYNC_CONFIGS, ...localConfigs];
 
     document.getElementById('new-type').onchange = function() {
-        const isGMB = this.value === 'GMB';
-        document.getElementById('gmb-extra').style.display = isGMB ? 'block' : 'none';
-        document.getElementById('kmb-extra').style.display = isGMB ? 'none' : 'block';
+        document.getElementById('new-route-id').style.display = (this.value === 'GMB') ? 'block' : 'none';
+        document.getElementById('new-dir').style.display = (this.value === 'GMB') ? 'none' : 'block';
     };
 
     function addLog(msg) {
         const logBox = document.getElementById('debug-log');
-        const time = new Date().toLocaleTimeString('zh-HK',{hour12:false});
-        logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
+        logBox.innerHTML += `<div>[${new Date().toLocaleTimeString('zh-HK',{hour12:false})}] ${msg}</div>`;
         logBox.scrollTop = logBox.scrollHeight;
     }
 
     function toggleSettings() {
         const p = document.getElementById('settings-panel');
-        p.style.display = p.style.display === 'block' ? 'none' : 'block';
+        p.style.display = (p.style.display === 'block') ? 'none' : 'block';
         if (p.style.display === 'block') renderList(); else updateUI();
     }
 
@@ -88,28 +99,22 @@
             route_id: document.getElementById('new-route-id').value.trim(),
             dir: document.getElementById('new-dir').value
         };
-        if(!route.route || !route.stop_id) return alert("資料唔完整！");
-        configs.push(route);
-        localStorage.setItem('bus_configs', JSON.stringify(configs));
+        localConfigs.push(route);
+        localStorage.setItem('bus_configs', JSON.stringify(localConfigs));
+        configs = [...SYNC_CONFIGS, ...localConfigs];
         renderList();
-        addLog(`已加入 ${route.route}`);
+        addLog("已新增臨時路線");
     }
 
     function renderList() {
-        document.getElementById('route-list').innerHTML = configs.map((r, i) => `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:#333; padding:12px; border-radius:8px;">
-                <span><b>${r.type} ${r.route}</b></span>
-                <button onclick="configs.splice(${i},1); localStorage.setItem('bus_configs', JSON.stringify(configs)); renderList();" style="background:#ff3b30; color:white; border:none; border-radius:5px; padding:5px 10px;">刪除</button>
-            </div>
-        `).join('');
+        document.getElementById('route-list').innerHTML = `<b>☁️ 釘死路線 (同步):</b><br>` + 
+            SYNC_CONFIGS.map(r => `<div style="font-size:13px; color:#aaa; margin:5px 0;">• ${r.type} ${r.route}</div>`).join('') +
+            `<hr><b>📱 本機臨時路線:</b><br>` +
+            (localConfigs.length === 0 ? '<div style="font-size:12px; color:#666">無</div>' : 
+            localConfigs.map((r, i) => `<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${r.type} ${r.route}</span><button onclick="localConfigs.splice(${i},1); localStorage.setItem('bus_configs', JSON.stringify(localConfigs)); configs=[...SYNC_CONFIGS, ...localConfigs]; renderList();">刪除</button></div>`).join(''));
     }
 
     async function updateUI() {
-        if (configs.length === 0) {
-            document.getElementById('display').innerHTML = '<div style="text-align:center; padding:50px; color:#666">請撳 ⚙️ 設定路線</div>';
-            return;
-        }
-        
         let html = '';
         const now = new Date();
 
@@ -120,6 +125,10 @@
                     const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
                     const json = await res.json();
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 2).map(d => ({ dest: d.dest_tc, time: d.eta }));
+                } else if (item.type === 'CTB') {
+                    const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`);
+                    const json = await res.json();
+                    etas = (json.data || []).slice(0, 2).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else {
                     const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
                     const json = await res.json();
@@ -131,15 +140,14 @@
                 const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -180);
 
                 if (validEtas.length === 0) {
-                    html += `<div class="card ${item.type==='GMB'?'gmb-card':''}" style="opacity:0.6">
-                        <div><span class="route-num">${item.route}</span><span class="dest">服務已結束</span></div>
-                        <div class="status-msg" style="font-size:16px; color:#666">明日請早</div>
+                    html += `<div class="card ${item.type.toLowerCase()}-card" style="opacity:0.6">
+                        <div><span class="route-num">${item.route}</span><span class="dest">服務已結束 / 暫無班次</span></div>
                     </div>`;
                 } else {
                     validEtas.forEach(eta => {
                         const diffMin = Math.floor((new Date(eta.time) - now) / 60000);
-                        let timeStr = diffMin <= 0 ? '<span class="status-msg" style="color:#ffcc00">即將抵達</span>' : `<span class="eta-min">${diffMin}</span><span class="eta-unit">分</span>`;
-                        html += `<div class="card ${item.type==='GMB'?'gmb-card':''}">
+                        let timeStr = diffMin <= 0 ? '<span class="status-msg" style="color:#ffcc00">即將抵達</span>' : `<span class="eta-min">${diffMin}</span><span style="font-size:16px">分</span>`;
+                        html += `<div class="card ${item.type.toLowerCase()}-card">
                             <div><span class="route-num">${item.route}</span><span class="dest">往 ${eta.dest}</span></div>
                             <div class="eta-box">${timeStr}</div>
                         </div>`;
