@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>實時巴士站牌 V22.0</title>
+    <title>實時巴士站牌 V23.0</title>
     <style>
         :root { 
             --kmb-color: #ffcc00; --gmb-color: #00ff00; --ctb-color: #fbca06; --ctb-border: #0055ad;
@@ -44,7 +44,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 MULTI-OPERATOR ENGINE V22.0</span>
+    <span>🚍 ALL-OPERATOR ENGINE V23.0</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -54,11 +54,11 @@
 <script>
     const ROUTES = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O', dest: '尖沙咀東' },
-        { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I', dest: '將軍澳(彩明)' },
+        { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I', dest: '彩明' },
         { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I', dest: '康城站' },
         { type: 'GMB', route: '105', route_id: '2006606', stop_id: '20014655', dest: '土瓜灣' },
-        { type: 'CTB', route: '694', stop_id: '002904', dir: 'inbound', dest: '調景嶺站' },
-        { type: 'CTB', route: '798', stop_id: '002903', dir: 'outbound', dest: '火炭' }
+        { type: 'CTB', route: '694', stop_id: '002904', dir: 'I', dest: '調景嶺站' },
+        { type: 'CTB', route: '798', stop_id: '002903', dir: 'O', dest: '火炭' }
     ];
 
     const PROXY = "https://api.allorigins.win/get?url=";
@@ -79,9 +79,13 @@
                 return raw.map(d => ({ time: d.timestamp, is_sch: d.eta_status === 0 }));
             }
             else if (item.type === 'CTB') {
-                // 🚀 城巴 API 處理
-                const res = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/${item.stop_id}/${item.route}?t=${ts}`);
-                const json = await res.json();
+                // 🚀 改用 Proxy 請求城巴 API，並統一為小寫 ctb
+                const target = `https://rt.data.gov.hk/v2/transport/citybus/eta/ctb/${item.stop_id}/${item.route}?t=${ts}`;
+                const res = await fetch(PROXY + encodeURIComponent(target));
+                const wrap = await res.json();
+                const json = JSON.parse(wrap.contents);
+                
+                // 城巴 dir 邏輯修正：I = Inbound, O = Outbound
                 return (json.data || [])
                     .filter(d => d.dir === item.dir)
                     .map(d => ({ time: d.eta, is_sch: false }));
@@ -130,7 +134,7 @@
             html += `</div></div>`;
         }
         document.getElementById('display').innerHTML = html;
-        document.getElementById('debug-log').innerHTML = `ALL SYSTEMS OPERATIONAL @ ${new Date().toLocaleTimeString()}`;
+        document.getElementById('debug-log').innerHTML = `ALL SYSTEMS SYNCED @ ${new Date().toLocaleTimeString()}`;
     }
 
     updateUI();
