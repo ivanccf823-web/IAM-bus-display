@@ -3,44 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>我的巴士站牌</title>
+    <title>Debug 模式 - 巴士站牌</title>
     <style>
-        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --bg-color: #000; --real-time-color: #00ff00; --scheduled-color: #777777; }
-        body { background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 10px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; opacity: 0.5; font-size: 12px; }
-        .card { background: #1a1a1a; margin: 12px 0; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; padding: 15px; border-left: 8px solid var(--kmb-color); min-height: 80px; }
-        .gmb-card { border-left-color: var(--gmb-color); }
-        .info-section { display: flex; flex-direction: column; justify-content: center; padding-right: 10px; flex: 1; }
-        .route-num { font-size: 42px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
-        .gmb-card .route-num { color: var(--gmb-color); }
-        .dest { font-size: 15px; color: #888; margin-top: 5px; font-weight: bold; }
-        .eta-section { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
-        .eta-box { width: 65px; height: 65px; background: #262626; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid #333; }
-        .eta-box:first-child { background: #333; border: 1px solid #444; width: 75px; height: 75px; }
+        body { background: #000; color: #fff; font-family: monospace; margin: 0; padding: 10px; }
+        .header { border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px; }
         
-        /* 顏色配置 */
-        .val-real { color: var(--real-time-color); } 
-        .val-sch { color: var(--scheduled-color); }  
-        .val-white { color: #ffffff; }               
+        /* 加大 Log 區域 */
+        #debug-console { 
+            width: 100%; 
+            height: 400px; 
+            background: #111; 
+            color: #0f0; 
+            border: 2px solid #333; 
+            padding: 10px; 
+            overflow-y: scroll; 
+            font-size: 12px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+            white-space: pre-wrap; /* 保留換行 */
+            word-break: break-all;
+        }
+
+        .btn { background: #28a745; color: white; border: none; padding: 10px; border-radius: 5px; width: 100%; margin-bottom: 10px; }
         
-        .eta-val { font-size: 30px; font-weight: 900; line-height: 1; }
-        .eta-box:first-child .eta-val { font-size: 38px; }
-        .eta-tag { font-size: 10px; margin-top: 4px; font-weight: bold; }
-        
-        .arriving { color: #ffcc00; font-size: 13px; font-weight: bold; animation: blink 1s infinite; text-align: center; }
-        @keyframes blink { 0% {opacity:1} 50% {opacity:0.3} 100% {opacity:1} }
-        #debug-log { height: 60px; background: #111; color: #00ff00; font-size: 10px; font-family: monospace; padding: 8px; border-radius: 8px; overflow-y: auto; margin-top: 10px; border: 1px solid #333; }
+        /* 縮小 UI 預覽 */
+        .preview-label { color: #888; font-size: 12px; margin-bottom: 5px; }
+        #display { opacity: 0.5; pointer-events: none; }
+        .card { background: #1a1a1a; margin: 5px 0; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; border-left: 5px solid #ffcc00; }
+        .eta-section { display: flex; gap: 5px; }
+        .eta-box { width: 40px; height: 40px; background: #222; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V12.0</span>
-    <span id="update-time">--:--:--</span>
+    <strong>🚍 完整 Debug Log 生成中...</strong>
+    <div id="update-time" style="font-size: 12px; color: #888;"></div>
 </div>
 
-<div id="display">載入中...</div>
-<div id="debug-log"></div>
+<button class="btn" onclick="updateUI()">手動刷新數據</button>
+
+<div id="debug-console">--- 系統啟動，準備抓取數據 ---</div>
+
+<div class="preview-label">UI 佈局預覽 (暫時性)：</div>
+<div id="display"></div>
 
 <script>
     const SYNC_CONFIGS = [
@@ -50,90 +56,83 @@
         { type: 'GMB', route: '105', route_id: '2006606', stop_id: '2001584' }
     ];
 
-    function addLog(msg) {
-        const logBox = document.getElementById('debug-log');
-        logBox.innerHTML += `<div>[${new Date().toLocaleTimeString('zh-HK',{hour12:false})}] ${msg}</div>`;
-        logBox.scrollTop = logBox.scrollHeight;
+    function log(msg, type = 'INFO') {
+        const consoleEl = document.getElementById('debug-console');
+        const time = new Date().toLocaleTimeString('zh-HK',{hour12:false});
+        const color = type === 'ERROR' ? '#f00' : (type === 'DATA' ? '#0af' : '#0f0');
+        consoleEl.innerHTML += `\n<span style="color:${color}">[${time}] [${type}] ${msg}</span>`;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+        console.log(`[${type}] ${msg}`);
     }
 
     async function updateUI() {
+        const display = document.getElementById('display');
+        document.getElementById('update-time').innerText = "最後更新: " + new Date().toLocaleTimeString();
         let html = '';
-        const now = new Date();
-        document.getElementById('update-time').innerText = now.toLocaleTimeString('zh-HK',{hour12:false});
+
+        log("開始輪詢各路線...");
 
         for (const item of SYNC_CONFIGS) {
             try {
                 let etas = [];
+                log(`正在處理 ${item.type} ${item.route}...`);
+
                 if (item.type === 'KMB') {
-                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
+                    const url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`;
+                    log(`Fetch URL: ${url}`);
+                    const res = await fetch(url);
+                    log(`HTTP 狀態: ${res.status}`);
                     const json = await res.json();
-                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ 
-                        dest: d.dest_tc, 
-                        time: d.eta,
-                        is_gmb: false 
-                    }));
+                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
+                    log(`${item.route} 成功獲得 ${etas.length} 班數據`);
                 } else if (item.type === 'GMB') {
-                    // 🚀 核心更新：使用 Proxy 請求政府小巴 API
-                    const target = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
-                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(target)}`;
+                    const targetUrl = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
                     
+                    log(`GMB 目標: ${targetUrl}`, 'INFO');
+                    log(`使用代理: ${proxyUrl}`, 'INFO');
+
                     const res = await fetch(proxyUrl);
-                    const json = await res.json();
+                    log(`代理 HTTP 狀態: ${res.status}`);
                     
-                    // 根據政府文檔 json.data[0].eta_res
-                    let rawList = [];
-                    if (json.data && Array.isArray(json.data) && json.data.length > 0) {
-                        rawList = json.data[0].eta_res || [];
-                    }
+                    const wrapper = await res.json();
+                    // log(`代理回傳內容截段: ${JSON.stringify(wrapper).substring(0, 100)}...`, 'DATA');
 
-                    etas = rawList.map(d => ({
-                        dest: '高山道',
-                        time: d.timestamp,
-                        is_sch: d.eta_status === 0, // 根據文檔，0 是預計
-                        is_gmb: true
-                    })).slice(0, 3);
-                }
-
-                const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120);
-
-                html += `<div class="card ${item.type.toLowerCase()}-card">
-                            <div class="info-section">
-                                <div class="route-num">${item.route}</div>
-                                <div class="dest">往 ${validEtas[0]?.dest || (item.type==='GMB'?'高山道':'---')}</div>
-                            </div>
-                            <div class="eta-section">`;
-
-                if (validEtas.length === 0) {
-                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務已結束</div>`;
-                } else {
-                    for (let i = 0; i < 3; i++) {
-                        if (validEtas[i]) {
-                            const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
-                            let colorClass = 'val-white';
-                            let tagHtml = '';
-
-                            if (validEtas[i].is_gmb) {
-                                colorClass = validEtas[i].is_sch ? 'val-sch' : 'val-real';
-                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>`;
-                            }
-                            
-                            let display = diff <= 0 ? 
-                                `<span class="arriving">即將抵達</span>` : 
-                                `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
-                            
-                            html += `<div class="eta-box">${display}</div>`;
+                    if (!wrapper.contents) {
+                        log(`${item.route} 錯誤: 代理伺服器沒有回傳 contents`, 'ERROR');
+                    } else {
+                        const json = JSON.parse(wrapper.contents);
+                        log(`${item.route} 原始 JSON 數據: ${wrapper.contents.substring(0, 200)}...`, 'DATA');
+                        
+                        let rawList = [];
+                        if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+                            log(`偵測到 data 為陣列，路徑: json.data[0].eta_res`);
+                            rawList = json.data[0].eta_res || [];
+                        } else if (json.data && json.data.eta_res) {
+                            log(`偵測到 data 為物件，路徑: json.data.eta_res`);
+                            rawList = json.data.eta_res;
                         } else {
-                            html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
+                            log(`無法識別的數據結構: ${Object.keys(json.data || {}).join(', ')}`, 'ERROR');
                         }
+                        
+                        etas = rawList.map(d => ({ dest: '高山道', time: d.timestamp, is_sch: d.eta_status === 0 })).slice(0, 3);
+                        log(`${item.route} 解析成功，獲得 ${etas.length} 班數據`);
                     }
                 }
-                html += `</div></div>`;
+
+                // 構建簡單 UI 以確認佈局
+                html += `<div class="card">
+                    <div><b>${item.route}</b><br><small>${item.type}</small></div>
+                    <div class="eta-section">${etas.map(e => `<div class="eta-box">${Math.floor((new Date(e.time) - new Date())/60000)}</div>`).join('')}</div>
+                </div>`;
+
             } catch (e) { 
-                addLog(`${item.route} 通訊失敗`);
+                log(`${item.route} 徹底失敗！原因: ${e.message}`, 'ERROR');
+                log(`Stack Trace: ${e.stack}`, 'ERROR');
             }
         }
-        document.getElementById('display').innerHTML = html;
-        addLog("刷新完成");
+        display.innerHTML = html;
+        log("--- 本次刷新週期結束 ---");
     }
 
     updateUI();
