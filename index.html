@@ -18,10 +18,9 @@
         .eta-box { width: 65px; height: 65px; background: #262626; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid #333; }
         .eta-box:first-child { background: #333; border: 1px solid #444; width: 75px; height: 75px; }
         
-        /* 顏色類別 */
-        .val-real { color: var(--real-time-color); } /* 小巴實時：綠色 */
-        .val-sch { color: var(--scheduled-color); }  /* 小巴預計：灰色 */
-        .val-white { color: #ffffff; }               /* 九巴：純白色 */
+        .val-real { color: var(--real-time-color); } 
+        .val-sch { color: var(--scheduled-color); }  
+        .val-white { color: #ffffff; }               
         
         .eta-val { font-size: 30px; font-weight: 900; line-height: 1; }
         .eta-box:first-child .eta-val { font-size: 38px; }
@@ -35,7 +34,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V11.1</span>
+    <span>🚍 REAL-TIME BUS V11.2</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -75,11 +74,19 @@
                 } else if (item.type === 'GMB') {
                     const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
                     const json = await res.json();
-                    const rawList = (json.data && json.data.eta_res) ? json.data.eta_res : [];
+                    
+                    // 🚀 根據政府 JSON 指引修正數據路徑：json.data[0].eta_res
+                    let rawList = [];
+                    if (json.data && Array.isArray(json.data) && json.data[0].eta_res) {
+                        rawList = json.data[0].eta_res;
+                    } else if (json.data && json.data.eta_res) {
+                        rawList = json.data.eta_res;
+                    }
+
                     etas = rawList.map(d => ({
                         dest: '高山道',
                         time: d.timestamp,
-                        is_sch: d.eta_status === 0, // 0是預計
+                        is_sch: d.eta_status === 0, 
                         is_gmb: true
                     })).slice(0, 3);
                 }
@@ -102,10 +109,9 @@
                             let colorClass = 'val-white';
                             let tagHtml = '';
 
-                            // 只有小巴先處理顏色同標籤
                             if (validEtas[i].is_gmb) {
                                 colorClass = validEtas[i].is_sch ? 'val-sch' : 'val-real';
-                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>`;
+                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(預計)' : '(即時)'}</span>`;
                             }
                             
                             let display = diff <= 0 ? 
@@ -120,11 +126,11 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 發生錯誤`);
+                addLog(`${item.route} 數據錯誤`);
             }
         }
         document.getElementById('display').innerHTML = html;
-        addLog("數據刷新完成");
+        addLog("刷新完成");
     }
 
     updateUI();
