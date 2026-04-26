@@ -18,6 +18,7 @@
         .eta-box { width: 65px; height: 65px; background: #262626; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid #333; }
         .eta-box:first-child { background: #333; border: 1px solid #444; width: 75px; height: 75px; }
         
+        /* 顏色配置 */
         .val-real { color: var(--real-time-color); } 
         .val-sch { color: var(--scheduled-color); }  
         .val-white { color: #ffffff; }               
@@ -34,7 +35,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V11.2</span>
+    <span>🚍 REAL-TIME BUS V12.0</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -72,21 +73,23 @@
                         is_gmb: false 
                     }));
                 } else if (item.type === 'GMB') {
-                    const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
+                    // 🚀 核心更新：使用 Proxy 請求政府小巴 API
+                    const target = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
+                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(target)}`;
+                    
+                    const res = await fetch(proxyUrl);
                     const json = await res.json();
                     
-                    // 🚀 根據政府 JSON 指引修正數據路徑：json.data[0].eta_res
+                    // 根據政府文檔 json.data[0].eta_res
                     let rawList = [];
-                    if (json.data && Array.isArray(json.data) && json.data[0].eta_res) {
-                        rawList = json.data[0].eta_res;
-                    } else if (json.data && json.data.eta_res) {
-                        rawList = json.data.eta_res;
+                    if (json.data && Array.isArray(json.data) && json.data.length > 0) {
+                        rawList = json.data[0].eta_res || [];
                     }
 
                     etas = rawList.map(d => ({
                         dest: '高山道',
                         time: d.timestamp,
-                        is_sch: d.eta_status === 0, 
+                        is_sch: d.eta_status === 0, // 根據文檔，0 是預計
                         is_gmb: true
                     })).slice(0, 3);
                 }
@@ -111,7 +114,7 @@
 
                             if (validEtas[i].is_gmb) {
                                 colorClass = validEtas[i].is_sch ? 'val-sch' : 'val-real';
-                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(預計)' : '(即時)'}</span>`;
+                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>`;
                             }
                             
                             let display = diff <= 0 ? 
@@ -126,7 +129,7 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 數據錯誤`);
+                addLog(`${item.route} 通訊失敗`);
             }
         }
         document.getElementById('display').innerHTML = html;
