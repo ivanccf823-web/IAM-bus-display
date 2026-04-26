@@ -2,268 +2,90 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>實時巴士站牌 V17.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>105 深度偵錯 V18.0</title>
     <style>
-        :root { 
-            --kmb-color: #ffcc00; 
-            --gmb-color: #00ff00; 
-            --bg-color: #000; 
-            --real-time-color: #00ff00; 
-            --scheduled-color: #777777; 
-            --card-bg: #1a1a1a;
+        body { background: #000; color: #0f0; font-family: monospace; padding: 15px; }
+        #console { 
+            width: 100%; height: 550px; background: #0a0a0a; color: #0f0; 
+            border: 1px solid #444; padding: 10px; overflow-y: scroll; 
+            font-size: 12px; white-space: pre-wrap;
         }
-        
-        body { 
-            background: var(--bg-color); 
-            color: #fff; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            margin: 0; 
-            padding: 10px;
-            overflow-x: hidden;
-        }
-
-        .header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 5px 15px; 
-            opacity: 0.5; 
-            font-size: 12px; 
-            font-weight: bold;
-        }
-
-        /* 卡片佈局 */
-        .card { 
-            background: var(--card-bg); 
-            margin: 12px 0; 
-            border-radius: 15px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 15px; 
-            border-left: 8px solid var(--kmb-color); 
-            min-height: 85px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        
-        .gmb-card { border-left-color: var(--gmb-color); }
-
-        /* 左邊路線資訊 */
-        .info-section { 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center; 
-            padding-right: 10px; 
-            flex: 1; 
-        }
-        .route-num { 
-            font-size: 45px; 
-            font-weight: 900; 
-            color: var(--kmb-color); 
-            line-height: 1; 
-            letter-spacing: -1px;
-        }
-        .gmb-card .route-num { color: var(--gmb-color); }
-        .dest { 
-            font-size: 16px; 
-            color: #999; 
-            margin-top: 6px; 
-            font-weight: bold; 
-        }
-
-        /* 右邊時間方塊 (向右拍齊) */
-        .eta-section { 
-            display: flex; 
-            gap: 8px; 
-            align-items: center; 
-            justify-content: flex-end; 
-        }
-        .eta-box { 
-            width: 68px; 
-            height: 68px; 
-            background: #262626; 
-            border-radius: 12px; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center; 
-            align-items: center; 
-            flex-shrink: 0; 
-            border: 1px solid #333; 
-        }
-        /* 第一班車加強視覺 */
-        .eta-box:first-child { 
-            background: #333; 
-            border: 2px solid #444; 
-            width: 78px; 
-            height: 78px; 
-        }
-
-        /* 顏色標籤 */
-        .val-real { color: var(--real-time-color); } 
-        .val-sch { color: var(--scheduled-color); }  
-        .val-white { color: #ffffff; }               
-        
-        .eta-val { font-size: 32px; font-weight: 900; line-height: 1; }
-        .eta-box:first-child .eta-val { font-size: 40px; }
-        .eta-tag { font-size: 11px; margin-top: 4px; font-weight: 900; }
-        
-        /* 智能補位文字 */
-        .fallback-text { font-size: 20px; color: var(--scheduled-color); font-weight: 900; }
-
-        .arriving { 
-            color: #ffcc00; 
-            font-size: 14px; 
-            font-weight: bold; 
-            animation: blink 1s infinite; 
-            text-align: center; 
-            line-height: 1.2;
-        }
-
-        @keyframes blink { 0% {opacity:1} 50% {opacity:0.3} 100% {opacity:1} }
-        
-        #debug-log { 
-            height: 40px; 
-            background: #111; 
-            color: #00ff00; 
-            font-size: 10px; 
-            font-family: monospace; 
-            padding: 5px 10px; 
-            border-radius: 8px; 
-            overflow: hidden; 
-            margin-top: 15px; 
-            border: 1px solid #222; 
-            opacity: 0.4;
-        }
+        .btn { background: #d9534f; color: white; border: none; padding: 15px; border-radius: 5px; width: 100%; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
+        .data-box { color: #0af; margin: 10px 0; border: 1px dashed #444; padding: 5px; }
+        .timestamp { color: #ffcc00; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="header">
-    <span>🚍 BUS STATION V17.0</span>
-    <span id="update-time">--:--:--</span>
+<div style="border-bottom: 1px solid #444; margin-bottom: 10px; padding-bottom: 5px;">
+    <strong>🎯 105 數據新鮮度偵查 (強制不緩存版)</strong>
 </div>
 
-<div id="display">正在連接伺服器...</div>
+<button class="btn" onclick="forceRefresh105()">強制請求最新 105 數據</button>
 
-<div id="debug-log">系統啟動中...</div>
+<div id="console">--- 等待指令 ---</div>
 
 <script>
-    // 📌 最終確定的路線配置
-    const SYNC_CONFIGS = [
-        { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
-        { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
-        { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I' },
-        { type: 'GMB', route: '105', route_id: '2006606', stop_id: '20014655' } 
-    ];
-
+    const RID = "2006606";
+    const SID = "20014655";
     const PROXY = "https://api.allorigins.win/get?url=";
+    let lastData = "";
 
-    function addLog(msg) {
-        const logBox = document.getElementById('debug-log');
-        logBox.innerHTML = `[${new Date().toLocaleTimeString('zh-HK',{hour12:false})}] ${msg}`;
+    function log(msg, type = 'INFO') {
+        const el = document.getElementById('console');
+        const time = new Date().toLocaleTimeString('zh-HK',{hour12:false});
+        const color = type === 'DATA' ? '#0af' : (type === 'ERROR' ? '#f00' : '#0f0');
+        el.innerHTML += `\n<span style="color:${color}">[${time}] ${msg}</span>`;
+        el.scrollTop = el.scrollHeight;
     }
 
-    async function updateUI() {
-        let html = '';
-        const now = new Date();
-        const hr = now.getHours();
-        document.getElementById('update-time').innerText = now.toLocaleTimeString('zh-HK',{hour12:false});
+    async function forceRefresh105() {
+        // 🚀 加入 Cache Buster: 喺網址後面加個隨機數，確保唔會攞到舊 Cache
+        const ts = Date.now();
+        const target = `https://data.etagmb.gov.hk/eta/route-stop/${RID}/${SID}?t=${ts}`;
+        const proxyUrl = `${PROXY}${encodeURIComponent(target)}`;
+        
+        log(`正在發送強制請求...`);
+        log(`目標 URL: ${target}`, 'DATA');
 
-        for (const item of SYNC_CONFIGS) {
-            try {
-                let etas = [];
-                let useFallback = false;
+        try {
+            const res = await fetch(proxyUrl);
+            const wrapper = await res.json();
+            const rawJson = wrapper.contents;
+            const json = JSON.parse(rawJson);
 
-                if (item.type === 'KMB') {
-                    // 九巴 API 穩定，直接抓取
-                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
-                    const json = await res.json();
-                    etas = (json.data || [])
-                        .filter(d => d.dir === item.dir)
-                        .slice(0, 3)
-                        .map(d => ({ dest: d.dest_tc, time: d.eta, is_gmb: false }));
-                } 
-                else if (item.type === 'GMB') {
-                    // 🚀 小巴 API 加入代理及官方規格解析
-                    try {
-                        const target = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
-                        const res = await fetch(PROXY + encodeURIComponent(target));
-                        const wrapper = await res.json();
-                        const json = JSON.parse(wrapper.contents);
-                        
-                        // 處理官方 data[0].eta_res 結構
-                        if (json.code === 500 || !json.data) {
-                            useFallback = true;
-                        } else {
-                            let rawList = Array.isArray(json.data) ? (json.data[0]?.eta_res || []) : (json.data.eta_res || []);
-                            etas = rawList.map(d => ({
-                                dest: '土瓜灣', 
-                                time: d.timestamp, 
-                                is_sch: d.eta_status === 0, // 官方規格：0為預計
-                                is_gmb: true
-                            })).slice(0, 3);
-                            if (etas.length === 0) useFallback = true;
-                        }
-                    } catch (e) {
-                        useFallback = true;
-                        addLog("小巴通訊異常");
-                    }
-                }
+            // 檢查數據時間
+            const apiTime = json.generated_timestamp || "無時間戳";
+            log(`伺服器生成時間: <span class="timestamp">${apiTime}</span>`);
 
-                const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120);
-
-                html += `<div class="card ${item.type.toLowerCase()}-card">
-                            <div class="info-section">
-                                <div class="route-num">${item.route}</div>
-                                <div class="dest">往 ${item.type === 'GMB' ? '土瓜灣' : (validEtas[0]?.dest || '---')}</div>
-                            </div>
-                            <div class="eta-section">`;
-
-                // 🚀 105 小巴智能補位
-                if (item.route === '105' && (useFallback || validEtas.length === 0) && hr >= 6 && hr < 24) {
-                    html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>`;
-                    html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
-                    html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
-                } 
-                else if (validEtas.length === 0) {
-                    html += `<div style="color:#666; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
-                } 
-                else {
-                    for (let i = 0; i < 3; i++) {
-                        if (validEtas[i]) {
-                            const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
-                            let colorClass = 'val-white';
-                            let tagHtml = '';
-
-                            if (validEtas[i].is_gmb) {
-                                colorClass = validEtas[i].is_sch ? 'val-sch' : 'val-real';
-                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>`;
-                            }
-                            
-                            let display = diff <= 0 ? 
-                                `<span class="arriving">即將<br>抵達</span>` : 
-                                `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
-                            
-                            html += `<div class="eta-box">${display}</div>`;
-                        } else {
-                            html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
-                        }
-                    }
-                }
-                html += `</div></div>`;
-            } catch (e) { 
-                addLog(`${item.route} 載入出錯`);
+            if (rawJson === lastData) {
+                log(`⚠️ 數據內容同上一次完全一樣！可能 API 未更新。`, 'ERROR');
+            } else {
+                log(`✅ 數據有變動！`, 'INFO');
+                lastData = rawJson;
             }
+
+            // 顯示最關鍵嘅 ETA 段落
+            if (json.data && json.data.length > 0 && json.data[0].eta_res) {
+                const etas = json.data[0].eta_res;
+                log(`目前 ETA 數據：`, 'DATA');
+                etas.forEach((e, i) => {
+                    log(`  ${i+1}. 時間: ${e.timestamp} | 狀態: ${e.eta_status === 1 ? '實時' : '預計'}`);
+                });
+            } else {
+                log(`API 內容: ${rawJson.substring(0, 200)}...`, 'DATA');
+            }
+
+        } catch (e) {
+            log(`請求失敗: ${e.message}`, 'ERROR');
         }
-        document.getElementById('display').innerHTML = html;
-        addLog("數據更新完成");
+        log(`-----------------------------------`);
     }
 
-    // 啟動
-    updateUI();
-    // 每 30 秒自動刷新一次
-    setInterval(updateUI, 30000);
+    // 自動每 30 秒跑一次，方便你觀察
+    setInterval(forceRefresh105, 30000);
+    forceRefresh105();
 </script>
 </body>
 </html>
