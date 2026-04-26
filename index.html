@@ -5,56 +5,85 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>我的巴士站牌</title>
     <style>
-        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --ctb-color: #0055ad; --bg-color: #000; }
-        body { background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 15px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #333; }
-        #settings-btn { font-size: 24px; background: none; border: none; color: #fff; cursor: pointer; }
+        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --ctb-color: #fbca06; --bg-color: #000; }
+        body { background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 10px; }
         
-        .card { border-left: 8px solid var(--kmb-color); background: #1a1a1a; margin: 15px 0; padding: 15px; border-radius: 12px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; opacity: 0.5; font-size: 12px; }
+        
+        .card { 
+            background: #1a1a1a; 
+            margin: 12px 0; 
+            border-radius: 12px; 
+            display: flex; 
+            align-items: center;
+            padding: 15px;
+            border-left: 6px solid var(--kmb-color);
+        }
         .gmb-card { border-left-color: var(--gmb-color); }
-        .ctb-card { border-left-color: var(--ctb-color); }
-        
-        .route-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
-        .route-num { font-size: 38px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
+        .ctb-card { border-left-color: #0055ad; }
+
+        /* 左邊：路線資訊 */
+        .info-section {
+            flex: 1; /* 佔用剩餘空間 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .route-num { font-size: 45px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
         .gmb-card .route-num { color: var(--gmb-color); }
-        .ctb-card .route-num { color: #fbca06; } /* 城巴號碼用返黃色 */
-        .dest { font-size: 16px; color: #aaa; }
+        .ctb-card .route-num { color: #fbca06; }
+        .dest { font-size: 16px; color: #888; margin-top: 6px; font-weight: bold; }
 
-        .eta-list { display: flex; gap: 10px; justify-content: flex-start; flex-wrap: wrap; }
-        .eta-item { background: #222; padding: 8px 12px; border-radius: 8px; min-width: 70px; text-align: center; border: 1px solid #333; }
-        .eta-item:first-child { border-color: #555; background: #2a2a2a; }
-        .eta-val { font-size: 26px; font-weight: bold; color: #fff; display: block; }
-        .eta-unit { font-size: 12px; color: #888; }
-        .eta-arriving { color: #ffcc00; font-size: 18px; font-weight: bold; line-height: 26px; }
-
-        .status-msg { font-size: 18px; color: #666; padding: 10px 0; }
-        #debug-log { height: 80px; background: #111; color: #00ff00; font-size: 10px; font-family: monospace; padding: 10px; border-radius: 8px; overflow-y: auto; margin-top: 15px; border: 1px solid #333; }
+        /* 右邊：三個時間方塊 */
+        .eta-section {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .eta-box {
+            width: 65px;
+            height: 65px;
+            background: #262626;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        /* 第一班車加強視覺 */
+        .eta-box:first-child {
+            background: #333;
+            border: 1px solid #444;
+            width: 75px;
+            height: 75px;
+        }
+        .eta-val { font-size: 32px; font-weight: 900; color: #fff; }
+        .eta-box:first-child .eta-val { font-size: 40px; }
+        
+        .arriving { color: #ffcc00; font-size: 14px; font-weight: bold; animation: blink 1s infinite; text-align: center; line-height: 1.2; }
+        
+        @keyframes blink { 0% {opacity:1} 50% {opacity:0.3} 100% {opacity:1} }
+        #debug-log { height: 60px; background: #111; color: #00ff00; font-size: 10px; font-family: monospace; padding: 8px; border-radius: 8px; overflow-y: auto; margin-top: 10px; border: 1px solid #333; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h2 style="margin:0">🚍 實時站牌 (3班車版)</h2>
-    <button id="settings-btn" onclick="toggleSettings()">⚙️</button>
+    <span>🚍 REAL-TIME BUS V6.0</span>
+    <span id="update-time">--:--:--</span>
 </div>
 
 <div id="display">載入中...</div>
 <div id="debug-log"></div>
 
-<div id="settings-panel" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#222; z-index:100; padding:20px; box-sizing:border-box;">
-    <h3>同步路線 (唯讀)</h3>
-    <div id="sync-list"></div>
-    <button onclick="toggleSettings()" style="width:100%; margin-top:20px; padding:15px; background:#555; color:#fff; border:none; border-radius:8px;">返回</button>
-</div>
-
 <script>
     const SYNC_CONFIGS = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
         { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
-        { type: 'CTB', route: '694', stop_id: '001684' }, // 城巴 API 通常不分 O/I，靠 StopID 定位
+        { type: 'CTB', route: '694', stop_id: '001684', dir: 'I' },
         { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I' },
         { type: 'GMB', route: '105', route_id: '2006606', stop_id: '2001584' },
-        { type: 'CTB', route: '798', stop_id: '001760' }
+        { type: 'CTB', route: '798', stop_id: '001760', dir: 'O' }
     ];
 
     function addLog(msg) {
@@ -63,15 +92,10 @@
         logBox.scrollTop = logBox.scrollHeight;
     }
 
-    function toggleSettings() {
-        const p = document.getElementById('settings-panel');
-        p.style.display = p.style.display === 'block' ? 'none' : 'block';
-        document.getElementById('sync-list').innerHTML = SYNC_CONFIGS.map(r => `<div>${r.type} ${r.route}</div>`).join('');
-    }
-
     async function updateUI() {
         let html = '';
         const now = new Date();
+        document.getElementById('update-time').innerText = now.toLocaleTimeString('zh-HK',{hour12:false});
 
         for (const item of SYNC_CONFIGS) {
             try {
@@ -79,47 +103,45 @@
                 if (item.type === 'KMB') {
                     const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
                     const json = await res.json();
-                    etas = (json.data || []).filter(d => d.dir === item.dir).map(d => ({ dest: d.dest_tc, time: d.eta }));
+                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'CTB') {
                     const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`);
                     const json = await res.json();
-                    etas = (json.data || []).map(d => ({ dest: d.dest_tc, time: d.eta }));
-                } else {
+                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
+                } else if (item.type === 'GMB') {
                     const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
                     const json = await res.json();
-                    if (json.data && json.data.eta_res) {
-                        etas = json.data.eta_res.map(d => ({ dest: '土瓜灣', time: d.timestamp }));
-                    }
+                    const rawEtas = json.data.eta_res || json.data || [];
+                    etas = rawEtas.slice(0, 3).map(d => ({ dest: '高山道', time: d.timestamp }));
                 }
 
-                // 過濾並取前 3 班
-                const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -60).slice(0, 3);
+                const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120);
 
-                let cardHtml = `<div class="card ${item.type.toLowerCase()}-card">
-                    <div class="route-header">
-                        <span class="route-num">${item.route}</span>
-                        <span class="dest">往 ${validEtas[0]?.dest || '--'}</span>
-                    </div>`;
+                html += `<div class="card ${item.type.toLowerCase()}-card">
+                            <div class="info-section">
+                                <div class="route-num">${item.route}</div>
+                                <div class="dest">往 ${validEtas[0]?.dest || '---'}</div>
+                            </div>
+                            <div class="eta-section">`;
 
                 if (validEtas.length === 0) {
-                    cardHtml += `<div class="status-msg">服務已結束 / 暫無班次</div>`;
+                    html += `<div style="color:#444; font-weight:bold">服務結束</div>`;
                 } else {
-                    cardHtml += `<div class="eta-list">`;
-                    validEtas.forEach(eta => {
-                        const diffMin = Math.floor((new Date(eta.time) - now) / 60000);
-                        cardHtml += `<div class="eta-item">`;
-                        if (diffMin <= 0) {
-                            cardHtml += `<span class="eta-arriving">即將抵達</span>`;
+                    for (let i = 0; i < 3; i++) {
+                        if (validEtas[i]) {
+                            const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
+                            let display = diff <= 0 ? `<span class="arriving">即將<br>抵達</span>` : `<span class="eta-val">${diff}</span>`;
+                            html += `<div class="eta-box">${display}</div>`;
                         } else {
-                            cardHtml += `<span class="eta-val">${diffMin}</span><span class="eta-unit">分鐘</span>`;
+                            html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
                         }
-                        cardHtml += `</div>`;
-                    });
-                    cardHtml += `</div>`;
+                    }
                 }
-                cardHtml += `</div>`;
-                html += cardHtml;
-            } catch (e) { addLog(`${item.route} 錯誤: ${e.message}`); }
+                
+                html += `</div></div>`;
+            } catch (e) { 
+                addLog(`${item.route} 錯誤: ${e.message}`);
+            }
         }
         document.getElementById('display').innerHTML = html;
         addLog("刷新完成");
