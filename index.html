@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>實時巴士站牌 V19.0</title>
+    <title>實時巴士站牌 V20.0</title>
     <style>
         :root { 
             --kmb-color: #ffcc00; --gmb-color: #00ff00; --bg-color: #000; 
@@ -46,15 +46,16 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V19.0</span>
+    <span>🚍 INDEPENDENT ENGINE V20.0</span>
     <span id="update-time">--:--:--</span>
 </div>
 
-<div id="display">載入中...</div>
-<div id="debug-log">系統啟動中...</div>
+<div id="display">正在連接伺服器...</div>
+<div id="debug-log">系統初始化中...</div>
 
 <script>
-    const SYNC_CONFIGS = [
+    // 📌 正確的站點配置
+    const ROUTES = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
         { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
         { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I' },
@@ -67,81 +68,84 @@
         document.getElementById('debug-log').innerHTML = `[${new Date().toLocaleTimeString('zh-HK',{hour12:false})}] ${msg}`;
     }
 
+    // 🚀 標準化 Fetch 邏輯 (參考 hkbus)
+    async function fetchETA(item) {
+        const ts = Date.now();
+        try {
+            if (item.type === 'KMB') {
+                const url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1?t=${ts}`;
+                const res = await fetch(url);
+                const json = await res.json();
+                return (json.data || [])
+                    .filter(d => d.dir === item.dir)
+                    .map(d => ({ dest: d.dest_tc, time: d.eta, is_sch: false, type: 'KMB' }));
+            } 
+            else if (item.type === 'GMB') {
+                const url = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}?t=${ts}`;
+                const res = await fetch(PROXY + encodeURIComponent(url));
+                const wrapper = await res.json();
+                const json = JSON.parse(wrapper.contents);
+                
+                // 參考 hkbus 邏輯：精準定位 data[0].eta
+                const rawList = (json.data && Array.isArray(json.data) && json.data.length > 0) ? json.data[0].eta : [];
+                return rawList.map(d => ({
+                    dest: '土瓜灣', 
+                    time: d.timestamp, 
+                    is_sch: d.eta_status === 0, 
+                    type: 'GMB'
+                }));
+            }
+        } catch (e) {
+            return null; // 代表通訊失敗
+        }
+    }
+
     async function updateUI() {
         let html = '';
         const now = new Date();
         const hr = now.getHours();
         document.getElementById('update-time').innerText = now.toLocaleTimeString('zh-HK',{hour12:false});
 
-        for (const item of SYNC_CONFIGS) {
-            try {
-                let etas = [];
-                let useFallback = false;
+        for (const item of ROUTES) {
+            const etas = await fetchETA(item);
+            let useFallback = (etas === null || etas.length === 0);
 
-                if (item.type === 'KMB') {
-                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1?t=${Date.now()}`);
-                    const json = await res.json();
-                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta, is_gmb: false }));
-                } 
-                else if (item.type === 'GMB') {
-                    try {
-                        const target = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}?t=${Date.now()}`;
-                        const res = await fetch(PROXY + encodeURIComponent(target));
-                        const wrapper = await res.json();
-                        const json = JSON.parse(wrapper.contents);
+            // 過濾過時數據
+            const validEtas = etas ? etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120).slice(0, 3) : [];
+
+            html += `<div class="card ${item.type.toLowerCase()}-card">
+                        <div class="info-section">
+                            <div class="route-num">${item.route}</div>
+                            <div class="dest">往 ${item.type === 'GMB' ? '土瓜灣' : (validEtas[0]?.dest || '---')}</div>
+                        </div>
+                        <div class="eta-section">`;
+
+            if (item.route === '105' && (useFallback || validEtas.length === 0) && hr >= 6 && hr < 24) {
+                html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>`;
+                html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
+                html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
+            } 
+            else if (validEtas.length === 0) {
+                html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
+            } 
+            else {
+                for (let i = 0; i < 3; i++) {
+                    if (validEtas[i]) {
+                        const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
+                        let colorClass = validEtas[i].type === 'GMB' ? (validEtas[i].is_sch ? 'val-sch' : 'val-real') : 'val-white';
+                        let tagHtml = validEtas[i].type === 'GMB' ? `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>` : '';
                         
-                        // 🚀 關鍵修正：將 eta_res 改回回傳數據中的 "eta"
-                        const rawList = (json.data && Array.isArray(json.data)) ? (json.data[0].eta || []) : (json.data?.eta || []);
-                        
-                        if (rawList.length === 0) {
-                            useFallback = true;
-                        } else {
-                            etas = rawList.map(d => ({
-                                dest: '土瓜灣', 
-                                time: d.timestamp, 
-                                is_sch: d.eta_status === 0, 
-                                is_gmb: true
-                            })).slice(0, 3);
-                        }
-                    } catch (e) { useFallback = true; }
-                }
-
-                const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120);
-
-                html += `<div class="card ${item.type.toLowerCase()}-card">
-                            <div class="info-section">
-                                <div class="route-num">${item.route}</div>
-                                <div class="dest">往 ${item.type === 'GMB' ? '土瓜灣' : (validEtas[0]?.dest || '---')}</div>
-                            </div>
-                            <div class="eta-section">`;
-
-                if (item.route === '105' && (useFallback || validEtas.length === 0) && hr >= 6 && hr < 24) {
-                    html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>`;
-                    html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
-                    html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
-                } 
-                else if (validEtas.length === 0) {
-                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
-                } 
-                else {
-                    for (let i = 0; i < 3; i++) {
-                        if (validEtas[i]) {
-                            const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
-                            let colorClass = item.type === 'GMB' ? (validEtas[i].is_sch ? 'val-sch' : 'val-real') : 'val-white';
-                            let tagHtml = item.type === 'GMB' ? `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>` : '';
-                            
-                            let display = diff <= 0 ? `<span class="arriving">即將<br>抵達</span>` : `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
-                            html += `<div class="eta-box">${display}</div>`;
-                        } else {
-                            html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
-                        }
+                        let display = diff <= 0 ? `<span class="arriving">即將<br>抵達</span>` : `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
+                        html += `<div class="eta-box">${display}</div>`;
+                    } else {
+                        html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
                     }
                 }
-                html += `</div></div>`;
-            } catch (e) { addLog(item.route + " 跳過"); }
+            }
+            html += `</div></div>`;
         }
         document.getElementById('display').innerHTML = html;
-        addLog("刷新成功");
+        addLog("數據與伺服器同步完成");
     }
 
     updateUI();
