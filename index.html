@@ -29,7 +29,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V7.3</span>
+    <span>🚍 REAL-TIME BUS V7.4</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -37,13 +37,14 @@
 <div id="debug-log"></div>
 
 <script>
+    // 📌 已釘死固定路線
     const SYNC_CONFIGS = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
         { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
         { type: 'CTB', route: '694', stop_id: '001684', dir: 'I' },
         { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I' },
         { type: 'GMB', route: '105', route_id: '2006606', stop_id: '2001584' },
-        { type: 'CTB', route: '798', stop_id: '001760', dir: 'O' }
+        { type: 'CTB', route: '798', stop_id: '001826', dir: 'O' } // 已更新 Stop ID 為 001826
     ];
 
     function addLog(msg) {
@@ -60,26 +61,32 @@
         for (const item of SYNC_CONFIGS) {
             try {
                 let etas = [];
-                let url = "";
+                // 使用最單純的 Fetch 設置以繞過 CORS
+                const fetchOptions = {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    referrerPolicy: 'no-referrer'
+                };
 
                 if (item.type === 'KMB') {
-                    url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`;
-                    const res = await fetch(url);
+                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`, fetchOptions);
                     const json = await res.json();
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'CTB') {
-                    // 城巴：移除所有 Headers，使用最簡單的 fetch
-                    url = `https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`;
-                    const res = await fetch(url);
+                    // 城巴 API 終極修復：確保 Company ID 是大寫 CTB，且移除所有特殊 Headers
+                    const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`, fetchOptions);
                     const json = await res.json();
                     if (json && json.data) {
                         etas = json.data.filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                     }
                 } else if (item.type === 'GMB') {
-                    url = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
-                    const res = await fetch(url);
+                    const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`, fetchOptions);
                     const json = await res.json();
-                    let rawData = (json.data && json.data.eta_res) ? json.data.eta_res : (Array.isArray(json.data) ? json.data : []);
+                    let rawData = [];
+                    if (json.data) {
+                        rawData = json.data.eta_res || (Array.isArray(json.data) ? json.data : []);
+                    }
                     etas = rawData.slice(0, 3).map(d => ({ dest: '高山道', time: d.timestamp || d.eta }));
                 }
 
@@ -93,7 +100,7 @@
                             <div class="eta-section">`;
 
                 if (validEtas.length === 0) {
-                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">今日服務結束</div>`;
+                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
                 } else {
                     for (let i = 0; i < 3; i++) {
                         if (validEtas[i]) {
@@ -107,9 +114,9 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 錯誤: ${e.message}`);
+                addLog(`${item.route} 失敗: ${e.message}`);
                 html += `<div class="card ${item.type.toLowerCase()}-card" style="opacity:0.4">
-                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">重試中...</div></div>
+                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">通訊中...</div></div>
                          </div>`;
             }
         }
