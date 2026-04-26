@@ -3,47 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>我的巴士站牌 V16.0</title>
+    <title>實時巴士站牌 V17.0</title>
     <style>
-        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --bg-color: #000; --real-time-color: #00ff00; --scheduled-color: #777777; }
-        body { background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 10px; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; opacity: 0.5; font-size: 12px; }
-        .card { background: #1a1a1a; margin: 12px 0; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; padding: 15px; border-left: 8px solid var(--kmb-color); min-height: 80px; }
-        .gmb-card { border-left-color: var(--gmb-color); }
-        .info-section { display: flex; flex-direction: column; justify-content: center; padding-right: 10px; flex: 1; }
-        .route-num { font-size: 42px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
-        .gmb-card .route-num { color: var(--gmb-color); }
-        .dest { font-size: 15px; color: #888; margin-top: 5px; font-weight: bold; }
-        .eta-section { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
-        .eta-box { width: 65px; height: 65px; background: #262626; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid #333; }
-        .eta-box:first-child { background: #333; border: 1px solid #444; width: 75px; height: 75px; }
+        :root { 
+            --kmb-color: #ffcc00; 
+            --gmb-color: #00ff00; 
+            --bg-color: #000; 
+            --real-time-color: #00ff00; 
+            --scheduled-color: #777777; 
+            --card-bg: #1a1a1a;
+        }
         
+        body { 
+            background: var(--bg-color); 
+            color: #fff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; 
+            padding: 10px;
+            overflow-x: hidden;
+        }
+
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 5px 15px; 
+            opacity: 0.5; 
+            font-size: 12px; 
+            font-weight: bold;
+        }
+
+        /* 卡片佈局 */
+        .card { 
+            background: var(--card-bg); 
+            margin: 12px 0; 
+            border-radius: 15px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 15px; 
+            border-left: 8px solid var(--kmb-color); 
+            min-height: 85px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .gmb-card { border-left-color: var(--gmb-color); }
+
+        /* 左邊路線資訊 */
+        .info-section { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            padding-right: 10px; 
+            flex: 1; 
+        }
+        .route-num { 
+            font-size: 45px; 
+            font-weight: 900; 
+            color: var(--kmb-color); 
+            line-height: 1; 
+            letter-spacing: -1px;
+        }
+        .gmb-card .route-num { color: var(--gmb-color); }
+        .dest { 
+            font-size: 16px; 
+            color: #999; 
+            margin-top: 6px; 
+            font-weight: bold; 
+        }
+
+        /* 右邊時間方塊 (向右拍齊) */
+        .eta-section { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+            justify-content: flex-end; 
+        }
+        .eta-box { 
+            width: 68px; 
+            height: 68px; 
+            background: #262626; 
+            border-radius: 12px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            flex-shrink: 0; 
+            border: 1px solid #333; 
+        }
+        /* 第一班車加強視覺 */
+        .eta-box:first-child { 
+            background: #333; 
+            border: 2px solid #444; 
+            width: 78px; 
+            height: 78px; 
+        }
+
+        /* 顏色標籤 */
         .val-real { color: var(--real-time-color); } 
         .val-sch { color: var(--scheduled-color); }  
         .val-white { color: #ffffff; }               
         
-        .eta-val { font-size: 30px; font-weight: 900; line-height: 1; }
-        .eta-box:first-child .eta-val { font-size: 38px; }
-        .eta-tag { font-size: 10px; margin-top: 4px; font-weight: bold; }
-        .fallback-text { font-size: 18px; color: var(--scheduled-color); font-weight: 900; }
+        .eta-val { font-size: 32px; font-weight: 900; line-height: 1; }
+        .eta-box:first-child .eta-val { font-size: 40px; }
+        .eta-tag { font-size: 11px; margin-top: 4px; font-weight: 900; }
         
-        .arriving { color: #ffcc00; font-size: 13px; font-weight: bold; animation: blink 1s infinite; text-align: center; }
+        /* 智能補位文字 */
+        .fallback-text { font-size: 20px; color: var(--scheduled-color); font-weight: 900; }
+
+        .arriving { 
+            color: #ffcc00; 
+            font-size: 14px; 
+            font-weight: bold; 
+            animation: blink 1s infinite; 
+            text-align: center; 
+            line-height: 1.2;
+        }
+
         @keyframes blink { 0% {opacity:1} 50% {opacity:0.3} 100% {opacity:1} }
-        #debug-log { height: 40px; background: #111; color: #00ff00; font-size: 10px; font-family: monospace; padding: 5px; border-radius: 8px; overflow-y: auto; margin-top: 10px; border: 1px solid #333; opacity: 0.3; }
+        
+        #debug-log { 
+            height: 40px; 
+            background: #111; 
+            color: #00ff00; 
+            font-size: 10px; 
+            font-family: monospace; 
+            padding: 5px 10px; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            margin-top: 15px; 
+            border: 1px solid #222; 
+            opacity: 0.4;
+        }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V16.0</span>
+    <span>🚍 BUS STATION V17.0</span>
     <span id="update-time">--:--:--</span>
 </div>
 
-<div id="display">載入中...</div>
-<div id="debug-log"></div>
+<div id="display">正在連接伺服器...</div>
+
+<div id="debug-log">系統啟動中...</div>
 
 <script>
-    // 📌 配置區：我們使用了狙擊成功的 20014655
+    // 📌 最終確定的路線配置
     const SYNC_CONFIGS = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
         { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
@@ -51,9 +157,11 @@
         { type: 'GMB', route: '105', route_id: '2006606', stop_id: '20014655' } 
     ];
 
+    const PROXY = "https://api.allorigins.win/get?url=";
+
     function addLog(msg) {
         const logBox = document.getElementById('debug-log');
-        logBox.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logBox.innerHTML = `[${new Date().toLocaleTimeString('zh-HK',{hour12:false})}] ${msg}`;
     }
 
     async function updateUI() {
@@ -68,30 +176,38 @@
                 let useFallback = false;
 
                 if (item.type === 'KMB') {
+                    // 九巴 API 穩定，直接抓取
                     const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
                     const json = await res.json();
-                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ 
-                        dest: d.dest_tc, time: d.eta, is_gmb: false 
-                    }));
-                } else if (item.type === 'GMB') {
+                    etas = (json.data || [])
+                        .filter(d => d.dir === item.dir)
+                        .slice(0, 3)
+                        .map(d => ({ dest: d.dest_tc, time: d.eta, is_gmb: false }));
+                } 
+                else if (item.type === 'GMB') {
+                    // 🚀 小巴 API 加入代理及官方規格解析
                     try {
                         const target = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
-                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;
-                        const res = await fetch(proxyUrl);
+                        const res = await fetch(PROXY + encodeURIComponent(target));
                         const wrapper = await res.json();
                         const json = JSON.parse(wrapper.contents);
                         
+                        // 處理官方 data[0].eta_res 結構
                         if (json.code === 500 || !json.data) {
                             useFallback = true;
                         } else {
-                            let rawList = (json.data && Array.isArray(json.data)) ? (json.data[0].eta_res || []) : (json.data.eta_res || []);
+                            let rawList = Array.isArray(json.data) ? (json.data[0]?.eta_res || []) : (json.data.eta_res || []);
                             etas = rawList.map(d => ({
-                                dest: '土瓜灣', time: d.timestamp, is_sch: d.eta_status === 0, is_gmb: true
+                                dest: '土瓜灣', 
+                                time: d.timestamp, 
+                                is_sch: d.eta_status === 0, // 官方規格：0為預計
+                                is_gmb: true
                             })).slice(0, 3);
                             if (etas.length === 0) useFallback = true;
                         }
                     } catch (e) {
                         useFallback = true;
+                        addLog("小巴通訊異常");
                     }
                 }
 
@@ -104,13 +220,16 @@
                             </div>
                             <div class="eta-section">`;
 
+                // 🚀 105 小巴智能補位
                 if (item.route === '105' && (useFallback || validEtas.length === 0) && hr >= 6 && hr < 24) {
                     html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>`;
-                    html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
-                    html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
-                } else if (validEtas.length === 0) {
-                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
-                } else {
+                    html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
+                    html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
+                } 
+                else if (validEtas.length === 0) {
+                    html += `<div style="color:#666; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
+                } 
+                else {
                     for (let i = 0; i < 3; i++) {
                         if (validEtas[i]) {
                             const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
@@ -123,7 +242,7 @@
                             }
                             
                             let display = diff <= 0 ? 
-                                `<span class="arriving">即將抵達</span>` : 
+                                `<span class="arriving">即將<br>抵達</span>` : 
                                 `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
                             
                             html += `<div class="eta-box">${display}</div>`;
@@ -133,13 +252,17 @@
                     }
                 }
                 html += `</div></div>`;
-            } catch (e) { addLog(item.route + " 載入跳過"); }
+            } catch (e) { 
+                addLog(`${item.route} 載入出錯`);
+            }
         }
         document.getElementById('display').innerHTML = html;
-        addLog("最後更新成功");
+        addLog("數據更新完成");
     }
 
+    // 啟動
     updateUI();
+    // 每 30 秒自動刷新一次
     setInterval(updateUI, 30000);
 </script>
 </body>
