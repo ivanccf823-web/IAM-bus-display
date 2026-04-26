@@ -18,9 +18,10 @@
         .eta-box { width: 65px; height: 65px; background: #262626; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid #333; }
         .eta-box:first-child { background: #333; border: 1px solid #444; width: 75px; height: 75px; }
         
-        /* 顏色邏輯 */
-        .val-real { color: var(--real-time-color); } /* 實時：綠色 */
-        .val-sch { color: var(--scheduled-color); }  /* 預計：灰色 */
+        /* 顏色類別 */
+        .val-real { color: var(--real-time-color); } /* 小巴實時：綠色 */
+        .val-sch { color: var(--scheduled-color); }  /* 小巴預計：灰色 */
+        .val-white { color: #ffffff; }               /* 九巴：純白色 */
         
         .eta-val { font-size: 30px; font-weight: 900; line-height: 1; }
         .eta-box:first-child .eta-val { font-size: 38px; }
@@ -34,7 +35,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V11.0</span>
+    <span>🚍 REAL-TIME BUS V11.1</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -66,11 +67,10 @@
                 if (item.type === 'KMB') {
                     const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
                     const json = await res.json();
-                    // 九巴大部分為實時數據
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ 
                         dest: d.dest_tc, 
-                        time: d.eta, 
-                        is_sch: false // 九巴預設為實時
+                        time: d.eta,
+                        is_gmb: false 
                     }));
                 } else if (item.type === 'GMB') {
                     const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
@@ -79,7 +79,8 @@
                     etas = rawList.map(d => ({
                         dest: '高山道',
                         time: d.timestamp,
-                        is_sch: d.eta_status === 0 // 1是實時，0是預計
+                        is_sch: d.eta_status === 0, // 0是預計
+                        is_gmb: true
                     })).slice(0, 3);
                 }
 
@@ -98,13 +99,18 @@
                     for (let i = 0; i < 3; i++) {
                         if (validEtas[i]) {
                             const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
-                            const isSch = validEtas[i].is_sch;
-                            const colorClass = isSch ? 'val-sch' : 'val-real';
-                            const tagText = isSch ? '(計)' : '(實)';
+                            let colorClass = 'val-white';
+                            let tagHtml = '';
+
+                            // 只有小巴先處理顏色同標籤
+                            if (validEtas[i].is_gmb) {
+                                colorClass = validEtas[i].is_sch ? 'val-sch' : 'val-real';
+                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>`;
+                            }
                             
                             let display = diff <= 0 ? 
                                 `<span class="arriving">即將抵達</span>` : 
-                                `<span class="eta-val ${colorClass}">${diff}</span><span class="eta-tag ${colorClass}">${tagText}</span>`;
+                                `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
                             
                             html += `<div class="eta-box">${display}</div>`;
                         } else {
@@ -114,11 +120,11 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 錯誤: ${e.message}`);
+                addLog(`${item.route} 發生錯誤`);
             }
         }
         document.getElementById('display').innerHTML = html;
-        addLog("刷新完成");
+        addLog("數據刷新完成");
     }
 
     updateUI();
