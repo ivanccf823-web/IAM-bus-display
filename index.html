@@ -3,42 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>105 專攻 Debug Mode</title>
+    <title>105 路線搜索器 V15.1</title>
     <style>
         body { background: #000; color: #fff; font-family: monospace; margin: 0; padding: 10px; }
-        .header { border-bottom: 2px solid #28a745; padding-bottom: 10px; margin-bottom: 10px; }
+        .header { border-bottom: 2px solid #0af; padding-bottom: 10px; margin-bottom: 10px; }
         #debug-console { 
             width: 100%; height: 500px; background: #0a0a0a; color: #0f0; 
             border: 1px solid #333; padding: 10px; overflow-y: scroll; 
-            font-size: 12px; box-sizing: border-box; white-space: pre-wrap; word-break: break-all;
+            font-size: 11px; box-sizing: border-box; white-space: pre-wrap; word-break: break-all;
         }
-        .btn-group { display: flex; gap: 10px; margin-bottom: 10px; }
-        .btn { flex: 1; padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
-        .btn-green { background: #28a745; color: white; }
-        .btn-blue { background: #007bff; color: white; }
-        .preview { opacity: 0.3; margin-top: 20px; border-top: 1px solid #222; padding-top: 10px; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .btn { padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: white; }
+        .btn-blue { background: #007bff; }
+        .btn-purple { background: #6f42c1; }
+        .input-box { width: 100%; padding: 10px; background: #222; border: 1px solid #444; color: #fff; margin-bottom: 10px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <strong>🛠️ 105 小巴數據偵察器 V15.0</strong>
+    <strong>🛠️ 105 路線全搜索 V15.1</strong>
 </div>
 
-<div class="btn-group">
-    <button class="btn btn-green" onclick="startScanning105()">掃描 105 全線車站 (往土瓜灣)</button>
-    <button class="btn btn-blue" onclick="testCurrentConfig()">執行現有路線刷新</button>
+<div class="controls">
+    <button class="btn btn-blue" onclick="findRouteID()">第一步：搜尋 "105" 路線 ID</button>
+    <button class="btn btn-purple" onclick="scanStops()">第二步：掃描下方 ID 的車站</button>
 </div>
 
-<div id="debug-console">--- 點擊上方按鈕開始偵錯 ---</div>
+<input type="text" id="target-route-id" class="input-box" value="2006606" placeholder="輸入 Route ID (預設 105)">
+<input type="text" id="target-dir" class="input-box" value="1" placeholder="輸入方向 (1 或 2)">
 
-<div class="preview">
-    <small>UI 預覽區 (Debug 期間僅供參考)</small>
-    <div id="display"></div>
-</div>
+<div id="debug-console">--- 請按順序點擊按鈕 ---</div>
 
 <script>
-    const GMB_105_ID = "2006606"; // 105 路線 ID
     const PROXY = "https://api.allorigins.win/get?url=";
 
     function log(msg, type = 'INFO') {
@@ -49,64 +46,58 @@
         consoleEl.scrollTop = consoleEl.scrollHeight;
     }
 
-    // 🚀 功能一：掃描 105 全線車站
-    async function startScanning105() {
-        log("開始掃描 105 路線 (往土瓜灣方向)...");
+    // 🚀 第一步：搜尋路線 ID
+    async function findRouteID() {
+        log("正在搜尋全港小巴路線庫中包含 '105' 的資料...");
         try {
-            // 105 路線在 API 中通常分為方向 1 和 2，我們試下方向 1 (往土瓜灣)
-            const target = `https://data.etagmb.gov.hk/route-stop/${GMB_105_ID}/1`;
-            const res = await fetch(PROXY + encodeURIComponent(target));
+            const res = await fetch(PROXY + encodeURIComponent("https://data.etagmb.gov.hk/route/nt/105"));
+            const wrapper = await res.json();
+            const json = JSON.parse(wrapper.contents);
+            
+            if (json.data && json.data.length > 0) {
+                log("搵到以下 105 相關路線：", 'DATA');
+                json.data.forEach(r => {
+                    log(`路線: ${r.route_code} | Route ID: ${r.route_id} | 區域: ${r.region}`, 'INFO');
+                });
+                log("請確認你要的是哪個 ID，然後填入下方的輸入框。", 'WARN');
+            } else {
+                log("搵唔到 105 路線資料。", 'ERROR');
+            }
+        } catch (e) { log("搜尋失敗: " + e.message, 'ERROR'); }
+    }
+
+    // 🚀 第二步：掃描車站
+    async function scanStops() {
+        const rid = document.getElementById('target-route-id').value;
+        const dir = document.getElementById('target-dir').value;
+        log(`開始掃描 Route ID: ${rid} | 方向: ${dir} 嘅所有車站...`);
+        
+        try {
+            const res = await fetch(PROXY + encodeURIComponent(`https://data.etagmb.gov.hk/route-stop/${rid}/${dir}`));
             const wrapper = await res.json();
             const json = JSON.parse(wrapper.contents);
 
-            if (!json.data || json.data.length === 0) {
-                log("無法獲取車站列表，可能是方向編號不對，嘗試方向 2...", 'WARN');
+            if (!json.data || json.data.route_stops.length === 0) {
+                log("呢個 ID 喺呢個方向冇站，試吓換方向 (1 或 2)！", 'ERROR');
+                if (json.message) log("API 訊息: " + json.message, 'WARN');
                 return;
             }
 
-            log(`成功獲取 ${json.data.length} 個站點，正在解析名稱...`, 'DATA');
-            
-            for (let stop of json.data) {
-                // 再去抓取每個站點的詳細名稱
-                const stopTarget = `https://data.etagmb.gov.hk/stop/${stop.stop_id}`;
-                const sRes = await fetch(PROXY + encodeURIComponent(stopTarget));
-                const sWrapper = await sRes.json();
-                const sJson = JSON.parse(sWrapper.contents);
-                const stopName = sJson.data ? sJson.data.name_tc : "未知車站";
-                
-                log(`[站點序號 ${stop.stop_seq}] ID: ${stop.stop_id} | 名稱: ${stopName}`, 'INFO');
+            const stops = json.data.route_stops;
+            log(`搵到 ${stops.length} 個車站，正在讀取車站名稱...`, 'DATA');
+
+            for (let s of stops) {
+                try {
+                    const sRes = await fetch(PROXY + encodeURIComponent(`https://data.etagmb.gov.hk/stop/${s.stop_id}`));
+                    const sWrap = await sRes.json();
+                    const sJson = JSON.parse(sWrap.contents);
+                    const name = sJson.data ? sJson.data.name_tc : "未知";
+                    log(`[序號 ${s.stop_seq}] ID: ${s.stop_id} | 名稱: ${name}`, 'INFO');
+                } catch (e) { log(`讀取站點 ${s.stop_id} 失敗`, 'WARN'); }
             }
-            log("--- 掃描完成，請尋找你所在的車站 ID ---", 'DATA');
+            log("--- 掃描完成！請話我知邊個 ID 係你上車嗰個站 ---", 'DATA');
 
-        } catch (e) {
-            log(`掃描失敗: ${e.message}`, 'ERROR');
-        }
-    }
-
-    // 🚀 功能二：執行現有路線刷新 (九巴 + 目前 105 設定)
-    async function testCurrentConfig() {
-        log("執行標準刷新測試...");
-        // ... (這裡保留之前的 KMB 抓取邏輯，方便比對)
-        const kmb_routes = [
-            { r: '98D', s: '6AE5EC17DAE4E646' },
-            { r: '290A', s: '3366C1DC458401B3' }
-        ];
-
-        for (let route of kmb_routes) {
-            try {
-                const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${route.s}/${route.r}/1`);
-                const json = await res.json();
-                log(`九巴 ${route.r} 狀態: ${json.data ? '正常' : '無數據'}`);
-            } catch (e) { log(`${route.r} 失敗`, 'ERROR'); }
-        }
-        
-        // 測試 105 即時 ETA
-        try {
-            const target = `https://data.etagmb.gov.hk/eta/route-stop/${GMB_105_ID}/2001584`;
-            const res = await fetch(PROXY + encodeURIComponent(target));
-            const wrapper = await res.json();
-            log(`105 (ID:2001584) ETA 原始回傳: ${wrapper.contents}`, 'DATA');
-        } catch (e) { log(`105 ETA 請求失敗`, 'ERROR'); }
+        } catch (e) { log("掃描失敗: " + e.message, 'ERROR'); }
     }
 </script>
 </body>
