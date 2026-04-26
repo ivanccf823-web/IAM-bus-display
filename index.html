@@ -2,75 +2,145 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>105 ETA 狙擊器 V15.2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>我的巴士站牌 V16.0</title>
     <style>
-        body { background: #000; color: #fff; font-family: monospace; padding: 15px; }
-        .header { border-bottom: 2px solid #0af; margin-bottom: 15px; }
-        #console { 
-            width: 100%; height: 500px; background: #0a0a0a; color: #0f0; 
-            border: 1px solid #333; padding: 10px; overflow-y: scroll; 
-            font-size: 12px; white-space: pre-wrap;
-        }
-        .btn { background: #007bff; color: white; border: none; padding: 15px; border-radius: 5px; width: 100%; font-weight: bold; cursor: pointer; }
-        .success-hit { background: #28a745; color: #fff; padding: 2px 5px; font-weight: bold; }
+        :root { --kmb-color: #ffcc00; --gmb-color: #00ff00; --bg-color: #000; --real-time-color: #00ff00; --scheduled-color: #777777; }
+        body { background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; margin: 0; padding: 10px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; opacity: 0.5; font-size: 12px; }
+        .card { background: #1a1a1a; margin: 12px 0; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; padding: 15px; border-left: 8px solid var(--kmb-color); min-height: 80px; }
+        .gmb-card { border-left-color: var(--gmb-color); }
+        .info-section { display: flex; flex-direction: column; justify-content: center; padding-right: 10px; flex: 1; }
+        .route-num { font-size: 42px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
+        .gmb-card .route-num { color: var(--gmb-color); }
+        .dest { font-size: 15px; color: #888; margin-top: 5px; font-weight: bold; }
+        .eta-section { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+        .eta-box { width: 65px; height: 65px; background: #262626; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-shrink: 0; border: 1px solid #333; }
+        .eta-box:first-child { background: #333; border: 1px solid #444; width: 75px; height: 75px; }
+        
+        .val-real { color: var(--real-time-color); } 
+        .val-sch { color: var(--scheduled-color); }  
+        .val-white { color: #ffffff; }               
+        
+        .eta-val { font-size: 30px; font-weight: 900; line-height: 1; }
+        .eta-box:first-child .eta-val { font-size: 38px; }
+        .eta-tag { font-size: 10px; margin-top: 4px; font-weight: bold; }
+        .fallback-text { font-size: 18px; color: var(--scheduled-color); font-weight: 900; }
+        
+        .arriving { color: #ffcc00; font-size: 13px; font-weight: bold; animation: blink 1s infinite; text-align: center; }
+        @keyframes blink { 0% {opacity:1} 50% {opacity:0.3} 100% {opacity:1} }
+        #debug-log { height: 40px; background: #111; color: #00ff00; font-size: 10px; font-family: monospace; padding: 5px; border-radius: 8px; overflow-y: auto; margin-top: 10px; border: 1px solid #333; opacity: 0.3; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <strong>🎯 105 小巴 ETA 狙擊器 (掃描 14 個站點)</strong>
+    <span>🚍 REAL-TIME BUS V16.0</span>
+    <span id="update-time">--:--:--</span>
 </div>
 
-<button class="btn" onclick="snipeETAs()">開始集體測試 14 個站點</button>
-
-<div id="console">--- 準備就緒，點擊上方按鈕開始 ---</div>
+<div id="display">載入中...</div>
+<div id="debug-log"></div>
 
 <script>
-    // 從你上次 Log 提取嘅 14 個 ID
-    const STOP_IDS = [
-        "20014652", "20014653", "20014654", "20014655", "20014656", 
-        "20014657", "20014204", "20014205", "20014658", "20001175", 
-        "20001150", "20001151", "20010616", "20014659"
+    // 📌 配置區：我們使用了狙擊成功的 20014655
+    const SYNC_CONFIGS = [
+        { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
+        { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
+        { type: 'KMB', route: '290X', stop_id: '3366C1DC458401B3', dir: 'I' },
+        { type: 'GMB', route: '105', route_id: '2006606', stop_id: '20014655' } 
     ];
-    const RID = "2006606";
-    const PROXY = "https://api.allorigins.win/get?url=";
 
-    function log(msg, isSuccess = false) {
-        const el = document.getElementById('console');
-        const time = new Date().toLocaleTimeString('zh-HK',{hour12:false});
-        const content = isSuccess ? `<span class="success-hit">${msg}</span>` : msg;
-        el.innerHTML += `\n[${time}] ${content}`;
-        el.scrollTop = el.scrollHeight;
+    function addLog(msg) {
+        const logBox = document.getElementById('debug-log');
+        logBox.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
     }
 
-    async function snipeETAs() {
-        log("開始狙擊測試...");
-        for (let i = 0; i < STOP_IDS.length; i++) {
-            const sid = STOP_IDS[i];
-            log(`正在測試 第 ${i+1} 個站 (ID: ${sid})...`);
-            
+    async function updateUI() {
+        let html = '';
+        const now = new Date();
+        const hr = now.getHours();
+        document.getElementById('update-time').innerText = now.toLocaleTimeString('zh-HK',{hour12:false});
+
+        for (const item of SYNC_CONFIGS) {
             try {
-                const target = `https://data.etagmb.gov.hk/eta/route-stop/${RID}/${sid}`;
-                const res = await fetch(PROXY + encodeURIComponent(target));
-                const wrapper = await res.json();
-                const json = JSON.parse(wrapper.contents);
+                let etas = [];
+                let useFallback = false;
 
-                if (json.data && (json.data.eta_res || json.data.length > 0)) {
-                    log(`🎯 命中！站點 ${sid} 有數據：${wrapper.contents.substring(0, 100)}...`, true);
-                } else if (json.code === 500) {
-                    log(`站點 ${sid} 回傳: 500 (無數據)`);
-                } else {
-                    log(`站點 ${sid} 回傳未知格式`);
+                if (item.type === 'KMB') {
+                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
+                    const json = await res.json();
+                    etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ 
+                        dest: d.dest_tc, time: d.eta, is_gmb: false 
+                    }));
+                } else if (item.type === 'GMB') {
+                    try {
+                        const target = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
+                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(target)}`;
+                        const res = await fetch(proxyUrl);
+                        const wrapper = await res.json();
+                        const json = JSON.parse(wrapper.contents);
+                        
+                        if (json.code === 500 || !json.data) {
+                            useFallback = true;
+                        } else {
+                            let rawList = (json.data && Array.isArray(json.data)) ? (json.data[0].eta_res || []) : (json.data.eta_res || []);
+                            etas = rawList.map(d => ({
+                                dest: '土瓜灣', time: d.timestamp, is_sch: d.eta_status === 0, is_gmb: true
+                            })).slice(0, 3);
+                            if (etas.length === 0) useFallback = true;
+                        }
+                    } catch (e) {
+                        useFallback = true;
+                    }
                 }
-            } catch (e) {
-                log(`站點 ${sid} 通訊失敗`);
-            }
-            // 稍作停頓防止被 Block
-            await new Promise(r => setTimeout(r, 800));
+
+                const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120);
+
+                html += `<div class="card ${item.type.toLowerCase()}-card">
+                            <div class="info-section">
+                                <div class="route-num">${item.route}</div>
+                                <div class="dest">往 ${item.type === 'GMB' ? '土瓜灣' : (validEtas[0]?.dest || '---')}</div>
+                            </div>
+                            <div class="eta-section">`;
+
+                if (item.route === '105' && (useFallback || validEtas.length === 0) && hr >= 6 && hr < 24) {
+                    html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>`;
+                    html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
+                    html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
+                } else if (validEtas.length === 0) {
+                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
+                } else {
+                    for (let i = 0; i < 3; i++) {
+                        if (validEtas[i]) {
+                            const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
+                            let colorClass = 'val-white';
+                            let tagHtml = '';
+
+                            if (validEtas[i].is_gmb) {
+                                colorClass = validEtas[i].is_sch ? 'val-sch' : 'val-real';
+                                tagHtml = `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>`;
+                            }
+                            
+                            let display = diff <= 0 ? 
+                                `<span class="arriving">即將抵達</span>` : 
+                                `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
+                            
+                            html += `<div class="eta-box">${display}</div>`;
+                        } else {
+                            html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
+                        }
+                    }
+                }
+                html += `</div></div>`;
+            } catch (e) { addLog(item.route + " 載入跳過"); }
         }
-        log("--- 狙擊完成 ---");
+        document.getElementById('display').innerHTML = html;
+        addLog("最後更新成功");
     }
+
+    updateUI();
+    setInterval(updateUI, 30000);
 </script>
 </body>
 </html>
