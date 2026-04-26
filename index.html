@@ -2,102 +2,74 @@
 <html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>105 路線搜索器 V15.1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>105 ETA 狙擊器 V15.2</title>
     <style>
-        body { background: #000; color: #fff; font-family: monospace; margin: 0; padding: 10px; }
-        .header { border-bottom: 2px solid #0af; padding-bottom: 10px; margin-bottom: 10px; }
-        #debug-console { 
+        body { background: #000; color: #fff; font-family: monospace; padding: 15px; }
+        .header { border-bottom: 2px solid #0af; margin-bottom: 15px; }
+        #console { 
             width: 100%; height: 500px; background: #0a0a0a; color: #0f0; 
             border: 1px solid #333; padding: 10px; overflow-y: scroll; 
-            font-size: 11px; box-sizing: border-box; white-space: pre-wrap; word-break: break-all;
+            font-size: 12px; white-space: pre-wrap;
         }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .btn { padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: white; }
-        .btn-blue { background: #007bff; }
-        .btn-purple { background: #6f42c1; }
-        .input-box { width: 100%; padding: 10px; background: #222; border: 1px solid #444; color: #fff; margin-bottom: 10px; box-sizing: border-box; }
+        .btn { background: #007bff; color: white; border: none; padding: 15px; border-radius: 5px; width: 100%; font-weight: bold; cursor: pointer; }
+        .success-hit { background: #28a745; color: #fff; padding: 2px 5px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <strong>🛠️ 105 路線全搜索 V15.1</strong>
+    <strong>🎯 105 小巴 ETA 狙擊器 (掃描 14 個站點)</strong>
 </div>
 
-<div class="controls">
-    <button class="btn btn-blue" onclick="findRouteID()">第一步：搜尋 "105" 路線 ID</button>
-    <button class="btn btn-purple" onclick="scanStops()">第二步：掃描下方 ID 的車站</button>
-</div>
+<button class="btn" onclick="snipeETAs()">開始集體測試 14 個站點</button>
 
-<input type="text" id="target-route-id" class="input-box" value="2006606" placeholder="輸入 Route ID (預設 105)">
-<input type="text" id="target-dir" class="input-box" value="1" placeholder="輸入方向 (1 或 2)">
-
-<div id="debug-console">--- 請按順序點擊按鈕 ---</div>
+<div id="console">--- 準備就緒，點擊上方按鈕開始 ---</div>
 
 <script>
+    // 從你上次 Log 提取嘅 14 個 ID
+    const STOP_IDS = [
+        "20014652", "20014653", "20014654", "20014655", "20014656", 
+        "20014657", "20014204", "20014205", "20014658", "20001175", 
+        "20001150", "20001151", "20010616", "20014659"
+    ];
+    const RID = "2006606";
     const PROXY = "https://api.allorigins.win/get?url=";
 
-    function log(msg, type = 'INFO') {
-        const consoleEl = document.getElementById('debug-console');
+    function log(msg, isSuccess = false) {
+        const el = document.getElementById('console');
         const time = new Date().toLocaleTimeString('zh-HK',{hour12:false});
-        const colors = { INFO: '#0f0', WARN: '#ff0', ERROR: '#f00', DATA: '#0af' };
-        consoleEl.innerHTML += `\n<span style="color:${colors[type]}">[${time}] [${type}] ${msg}</span>`;
-        consoleEl.scrollTop = consoleEl.scrollHeight;
+        const content = isSuccess ? `<span class="success-hit">${msg}</span>` : msg;
+        el.innerHTML += `\n[${time}] ${content}`;
+        el.scrollTop = el.scrollHeight;
     }
 
-    // 🚀 第一步：搜尋路線 ID
-    async function findRouteID() {
-        log("正在搜尋全港小巴路線庫中包含 '105' 的資料...");
-        try {
-            const res = await fetch(PROXY + encodeURIComponent("https://data.etagmb.gov.hk/route/nt/105"));
-            const wrapper = await res.json();
-            const json = JSON.parse(wrapper.contents);
+    async function snipeETAs() {
+        log("開始狙擊測試...");
+        for (let i = 0; i < STOP_IDS.length; i++) {
+            const sid = STOP_IDS[i];
+            log(`正在測試 第 ${i+1} 個站 (ID: ${sid})...`);
             
-            if (json.data && json.data.length > 0) {
-                log("搵到以下 105 相關路線：", 'DATA');
-                json.data.forEach(r => {
-                    log(`路線: ${r.route_code} | Route ID: ${r.route_id} | 區域: ${r.region}`, 'INFO');
-                });
-                log("請確認你要的是哪個 ID，然後填入下方的輸入框。", 'WARN');
-            } else {
-                log("搵唔到 105 路線資料。", 'ERROR');
+            try {
+                const target = `https://data.etagmb.gov.hk/eta/route-stop/${RID}/${sid}`;
+                const res = await fetch(PROXY + encodeURIComponent(target));
+                const wrapper = await res.json();
+                const json = JSON.parse(wrapper.contents);
+
+                if (json.data && (json.data.eta_res || json.data.length > 0)) {
+                    log(`🎯 命中！站點 ${sid} 有數據：${wrapper.contents.substring(0, 100)}...`, true);
+                } else if (json.code === 500) {
+                    log(`站點 ${sid} 回傳: 500 (無數據)`);
+                } else {
+                    log(`站點 ${sid} 回傳未知格式`);
+                }
+            } catch (e) {
+                log(`站點 ${sid} 通訊失敗`);
             }
-        } catch (e) { log("搜尋失敗: " + e.message, 'ERROR'); }
-    }
-
-    // 🚀 第二步：掃描車站
-    async function scanStops() {
-        const rid = document.getElementById('target-route-id').value;
-        const dir = document.getElementById('target-dir').value;
-        log(`開始掃描 Route ID: ${rid} | 方向: ${dir} 嘅所有車站...`);
-        
-        try {
-            const res = await fetch(PROXY + encodeURIComponent(`https://data.etagmb.gov.hk/route-stop/${rid}/${dir}`));
-            const wrapper = await res.json();
-            const json = JSON.parse(wrapper.contents);
-
-            if (!json.data || json.data.route_stops.length === 0) {
-                log("呢個 ID 喺呢個方向冇站，試吓換方向 (1 或 2)！", 'ERROR');
-                if (json.message) log("API 訊息: " + json.message, 'WARN');
-                return;
-            }
-
-            const stops = json.data.route_stops;
-            log(`搵到 ${stops.length} 個車站，正在讀取車站名稱...`, 'DATA');
-
-            for (let s of stops) {
-                try {
-                    const sRes = await fetch(PROXY + encodeURIComponent(`https://data.etagmb.gov.hk/stop/${s.stop_id}`));
-                    const sWrap = await sRes.json();
-                    const sJson = JSON.parse(sWrap.contents);
-                    const name = sJson.data ? sJson.data.name_tc : "未知";
-                    log(`[序號 ${s.stop_seq}] ID: ${s.stop_id} | 名稱: ${name}`, 'INFO');
-                } catch (e) { log(`讀取站點 ${s.stop_id} 失敗`, 'WARN'); }
-            }
-            log("--- 掃描完成！請話我知邊個 ID 係你上車嗰個站 ---", 'DATA');
-
-        } catch (e) { log("掃描失敗: " + e.message, 'ERROR'); }
+            // 稍作停頓防止被 Block
+            await new Promise(r => setTimeout(r, 800));
+        }
+        log("--- 狙擊完成 ---");
     }
 </script>
 </body>
