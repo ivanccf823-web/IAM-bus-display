@@ -29,7 +29,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V7.2</span>
+    <span>🚍 REAL-TIME BUS V7.3</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -60,24 +60,24 @@
         for (const item of SYNC_CONFIGS) {
             try {
                 let etas = [];
-                const ts = Date.now(); // Cache buster
+                let url = "";
 
                 if (item.type === 'KMB') {
-                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1?t=${ts}`);
+                    url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`;
+                    const res = await fetch(url);
                     const json = await res.json();
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'CTB') {
-                    // 城巴 API 強化請求：加入 Accept Header
-                    const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}?t=${ts}`, {
-                        method: 'GET',
-                        headers: { 'Accept': 'application/json' }
-                    });
+                    // 城巴：移除所有 Headers，使用最簡單的 fetch
+                    url = `https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`;
+                    const res = await fetch(url);
                     const json = await res.json();
-                    if (json.data) {
+                    if (json && json.data) {
                         etas = json.data.filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                     }
                 } else if (item.type === 'GMB') {
-                    const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}?t=${ts}`);
+                    url = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
+                    const res = await fetch(url);
                     const json = await res.json();
                     let rawData = (json.data && json.data.eta_res) ? json.data.eta_res : (Array.isArray(json.data) ? json.data : []);
                     etas = rawData.slice(0, 3).map(d => ({ dest: '高山道', time: d.timestamp || d.eta }));
@@ -107,14 +107,14 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 失敗: ${e.message}`);
+                addLog(`${item.route} 錯誤: ${e.message}`);
                 html += `<div class="card ${item.type.toLowerCase()}-card" style="opacity:0.4">
-                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">通訊中...</div></div>
+                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">重試中...</div></div>
                          </div>`;
             }
         }
         document.getElementById('display').innerHTML = html;
-        addLog("數據刷新完成");
+        addLog("刷新完成");
     }
 
     updateUI();
