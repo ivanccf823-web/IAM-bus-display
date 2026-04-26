@@ -29,7 +29,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V8.0 (PROXY)</span>
+    <span>🚍 BUS DISPLAY V8.1</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -68,13 +68,12 @@
                     const json = await res.json();
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'CTB') {
-                    // 🚀 城巴使用代理伺服器繞過 CORS
-                    const targetUrl = `https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`;
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+                    // 🚀 使用 corsproxy.io 強力代理
+                    const target = `https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`;
+                    url = `https://corsproxy.io/?${encodeURIComponent(target)}`;
                     
-                    const res = await fetch(proxyUrl);
-                    const wrapper = await res.json();
-                    const json = JSON.parse(wrapper.contents); // 代理會把結果包在 contents 欄位
+                    const res = await fetch(url);
+                    const json = await res.json();
                     
                     if (json && json.data) {
                         etas = json.data.filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
@@ -97,7 +96,7 @@
                             <div class="eta-section">`;
 
                 if (validEtas.length === 0) {
-                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">今日服務結束</div>`;
+                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
                 } else {
                     for (let i = 0; i < 3; i++) {
                         if (validEtas[i]) {
@@ -111,7 +110,10 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 代理請求失敗`);
+                addLog(`${item.route} 代理請求失敗: ${e.message}`);
+                html += `<div class="card ${item.type.toLowerCase()}-card" style="opacity:0.4">
+                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">城巴重試中...</div></div>
+                         </div>`;
             }
         }
         document.getElementById('display').innerHTML = html;
