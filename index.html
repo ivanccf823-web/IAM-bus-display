@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>實時巴士站牌 V20.0</title>
+    <title>實時巴士站牌 V21.0</title>
     <style>
         :root { 
             --kmb-color: #ffcc00; --gmb-color: #00ff00; --bg-color: #000; 
@@ -13,17 +13,21 @@
             background: var(--bg-color); color: #fff; font-family: -apple-system, sans-serif; 
             margin: 0; padding: 10px; overflow-x: hidden;
         }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; opacity: 0.5; font-size: 12px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 5px 15px; opacity: 0.5; font-size: 11px; letter-spacing: 1px; }
         .card { 
             background: #1a1a1a; margin: 12px 0; border-radius: 15px; display: flex; 
             justify-content: space-between; align-items: center; padding: 15px; 
-            border-left: 8px solid var(--kmb-color); min-height: 85px; 
+            border-left: 8px solid var(--kmb-color); min-height: 85px; position: relative;
         }
         .gmb-card { border-left-color: var(--gmb-color); }
         .info-section { display: flex; flex-direction: column; justify-content: center; flex: 1; }
         .route-num { font-size: 45px; font-weight: 900; color: var(--kmb-color); line-height: 1; }
         .gmb-card .route-num { color: var(--gmb-color); }
         .dest { font-size: 16px; color: #999; margin-top: 6px; font-weight: bold; }
+        
+        /* 官方備註字 */
+        .remarks { font-size: 11px; color: #ffcc00; margin-top: 4px; font-weight: normal; opacity: 0.8; }
+
         .eta-section { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
         .eta-box { 
             width: 68px; height: 68px; background: #262626; border-radius: 12px; 
@@ -31,30 +35,32 @@
             flex-shrink: 0; border: 1px solid #333; 
         }
         .eta-box:first-child { background: #333; border: 2px solid #444; width: 78px; height: 78px; }
+        
         .val-real { color: var(--real-time-color); } 
         .val-sch { color: var(--scheduled-color); }  
         .val-white { color: #ffffff; }               
+        
         .eta-val { font-size: 32px; font-weight: 900; line-height: 1; }
         .eta-box:first-child .eta-val { font-size: 40px; }
-        .eta-tag { font-size: 11px; margin-top: 4px; font-weight: 900; }
+        .eta-tag { font-size: 10px; margin-top: 4px; font-weight: 900; opacity: 0.7; }
         .fallback-text { font-size: 20px; color: var(--scheduled-color); font-weight: 900; }
+        
         .arriving { color: #ffcc00; font-size: 14px; font-weight: bold; animation: blink 1s infinite; text-align: center; line-height: 1.2; }
         @keyframes blink { 0% {opacity:1} 50% {opacity:0.3} 100% {opacity:1} }
-        #debug-log { height: 40px; background: #111; color: #00ff00; font-size: 10px; font-family: monospace; padding: 5px 10px; border-radius: 8px; overflow: hidden; margin-top: 15px; border: 1px solid #222; opacity: 0.4; }
+        #debug-log { height: 35px; background: #111; color: #0f0; font-size: 10px; font-family: monospace; padding: 5px 12px; border-radius: 8px; margin-top: 15px; border: 1px solid #222; opacity: 0.4; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <span>🚍 INDEPENDENT ENGINE V20.0</span>
+    <span>🛡️ INDEPENDENT ENGINE V21.0</span>
     <span id="update-time">--:--:--</span>
 </div>
 
-<div id="display">正在連接伺服器...</div>
-<div id="debug-log">系統初始化中...</div>
+<div id="display">ENGINE LOADING...</div>
+<div id="debug-log">SYSTEM ONLINE</div>
 
 <script>
-    // 📌 正確的站點配置
     const ROUTES = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
         { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
@@ -64,40 +70,25 @@
 
     const PROXY = "https://api.allorigins.win/get?url=";
 
-    function addLog(msg) {
-        document.getElementById('debug-log').innerHTML = `[${new Date().toLocaleTimeString('zh-HK',{hour12:false})}] ${msg}`;
-    }
-
-    // 🚀 標準化 Fetch 邏輯 (參考 hkbus)
-    async function fetchETA(item) {
+    async function fetchData(item) {
         const ts = Date.now();
         try {
             if (item.type === 'KMB') {
-                const url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1?t=${ts}`;
-                const res = await fetch(url);
+                const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1?t=${ts}`);
                 const json = await res.json();
-                return (json.data || [])
-                    .filter(d => d.dir === item.dir)
-                    .map(d => ({ dest: d.dest_tc, time: d.eta, is_sch: false, type: 'KMB' }));
-            } 
-            else if (item.type === 'GMB') {
-                const url = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}?t=${ts}`;
-                const res = await fetch(PROXY + encodeURIComponent(url));
-                const wrapper = await res.json();
-                const json = JSON.parse(wrapper.contents);
-                
-                // 參考 hkbus 邏輯：精準定位 data[0].eta
-                const rawList = (json.data && Array.isArray(json.data) && json.data.length > 0) ? json.data[0].eta : [];
-                return rawList.map(d => ({
-                    dest: '土瓜灣', 
-                    time: d.timestamp, 
-                    is_sch: d.eta_status === 0, 
-                    type: 'GMB'
+                return (json.data || []).filter(d => d.dir === item.dir).map(d => ({
+                    dest: d.dest_tc, time: d.eta, is_sch: false, remark: ""
+                }));
+            } else {
+                const res = await fetch(PROXY + encodeURIComponent(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}?t=${ts}`));
+                const wrap = await res.json();
+                const json = JSON.parse(wrap.contents);
+                const raw = (json.data && Array.isArray(json.data) && json.data.length > 0) ? json.data[0].eta : [];
+                return raw.map(d => ({
+                    dest: '土瓜灣', time: d.timestamp, is_sch: d.eta_status === 0, remark: d.remarks_tc || ""
                 }));
             }
-        } catch (e) {
-            return null; // 代表通訊失敗
-        }
+        } catch (e) { return null; }
     }
 
     async function updateUI() {
@@ -107,35 +98,33 @@
         document.getElementById('update-time').innerText = now.toLocaleTimeString('zh-HK',{hour12:false});
 
         for (const item of ROUTES) {
-            const etas = await fetchETA(item);
-            let useFallback = (etas === null || etas.length === 0);
-
-            // 過濾過時數據
-            const validEtas = etas ? etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120).slice(0, 3) : [];
+            const res = await fetchData(item);
+            const valid = res ? res.filter(e => (new Date(e.time) - now) / 1000 > -120).slice(0, 3) : [];
+            const hasData = valid.length > 0;
+            const remark = (valid[0] && valid[0].remark) ? `<div class="remarks">⚠️ ${valid[0].remark}</div>` : "";
 
             html += `<div class="card ${item.type.toLowerCase()}-card">
                         <div class="info-section">
                             <div class="route-num">${item.route}</div>
-                            <div class="dest">往 ${item.type === 'GMB' ? '土瓜灣' : (validEtas[0]?.dest || '---')}</div>
+                            <div class="dest">往 ${item.type === 'GMB' ? '土瓜灣' : (valid[0]?.dest || '---')}</div>
+                            ${remark}
                         </div>
                         <div class="eta-section">`;
 
-            if (item.route === '105' && (useFallback || validEtas.length === 0) && hr >= 6 && hr < 24) {
-                html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>`;
-                html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
-                html += `<div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
-            } 
-            else if (validEtas.length === 0) {
+            if (item.route === '105' && (!hasData) && hr >= 6 && hr < 24) {
+                html += `<div class="eta-box"><span class="fallback-text">5-20</span><span class="eta-tag val-sch">(計)</span></div>
+                         <div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>
+                         <div class="eta-box" style="opacity:0.2"><span class="eta-val">--</span></div>`;
+            } else if (!hasData) {
                 html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
-            } 
-            else {
+            } else {
                 for (let i = 0; i < 3; i++) {
-                    if (validEtas[i]) {
-                        const diff = Math.floor((new Date(validEtas[i].time) - now) / 60000);
-                        let colorClass = validEtas[i].type === 'GMB' ? (validEtas[i].is_sch ? 'val-sch' : 'val-real') : 'val-white';
-                        let tagHtml = validEtas[i].type === 'GMB' ? `<span class="eta-tag ${colorClass}">${validEtas[i].is_sch ? '(計)' : '(實)'}</span>` : '';
-                        
-                        let display = diff <= 0 ? `<span class="arriving">即將<br>抵達</span>` : `<span class="eta-val ${colorClass}">${diff}</span>${tagHtml}`;
+                    if (valid[i]) {
+                        const diff = Math.floor((new Date(valid[i].time) - now) / 60000);
+                        const isGMB = item.type === 'GMB';
+                        const color = isGMB ? (valid[i].is_sch ? 'val-sch' : 'val-real') : 'val-white';
+                        const tag = isGMB ? `<span class="eta-tag ${color}">${valid[i].is_sch ? '(計)' : '(實)'}</span>` : '';
+                        const display = diff <= 0 ? `<span class="arriving">即將抵達</span>` : `<span class="eta-val ${color}">${diff}</span>${tag}`;
                         html += `<div class="eta-box">${display}</div>`;
                     } else {
                         html += `<div class="eta-box" style="opacity:0.15"><span class="eta-val">--</span></div>`;
@@ -145,7 +134,7 @@
             html += `</div></div>`;
         }
         document.getElementById('display').innerHTML = html;
-        addLog("數據與伺服器同步完成");
+        document.getElementById('debug-log').innerHTML = `SYNC COMPLETED @ ${new Date().toLocaleTimeString()}`;
     }
 
     updateUI();
