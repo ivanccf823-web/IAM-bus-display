@@ -29,7 +29,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 REAL-TIME BUS V7.1</span>
+    <span>🚍 REAL-TIME BUS V7.2</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -37,7 +37,6 @@
 <div id="debug-log"></div>
 
 <script>
-    // 固定的路線名單
     const SYNC_CONFIGS = [
         { type: 'KMB', route: '98D', stop_id: '6AE5EC17DAE4E646', dir: 'O' },
         { type: 'KMB', route: '290A', stop_id: '3366C1DC458401B3', dir: 'I' },
@@ -61,29 +60,29 @@
         for (const item of SYNC_CONFIGS) {
             try {
                 let etas = [];
+                const ts = Date.now(); // Cache buster
+
                 if (item.type === 'KMB') {
-                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
+                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1?t=${ts}`);
                     const json = await res.json();
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'CTB') {
-                    // 修復城巴：加入更強的 Headers 並處理空數據
-                    const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`);
+                    // 城巴 API 強化請求：加入 Accept Header
+                    const res = await fetch(`https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}?t=${ts}`, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' }
+                    });
                     const json = await res.json();
                     if (json.data) {
                         etas = json.data.filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                     }
                 } else if (item.type === 'GMB') {
-                    // 修復小巴：深度檢查數據結構
-                    const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
+                    const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}?t=${ts}`);
                     const json = await res.json();
-                    let rawData = [];
-                    if (json.data && json.data.eta_res) rawData = json.data.eta_res;
-                    else if (json.data && Array.isArray(json.data)) rawData = json.data;
-                    
+                    let rawData = (json.data && json.data.eta_res) ? json.data.eta_res : (Array.isArray(json.data) ? json.data : []);
                     etas = rawData.slice(0, 3).map(d => ({ dest: '高山道', time: d.timestamp || d.eta }));
                 }
 
-                // 過濾已經過期的數據 (保留2分鐘內已過期的，防止因秒數誤差變空)
                 const validEtas = etas.filter(eta => (new Date(eta.time) - now) / 1000 > -120);
 
                 html += `<div class="card ${item.type.toLowerCase()}-card">
@@ -94,7 +93,7 @@
                             <div class="eta-section">`;
 
                 if (validEtas.length === 0) {
-                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">服務結束</div>`;
+                    html += `<div style="color:#555; font-size:14px; font-weight:bold; margin-right:10px;">今日服務結束</div>`;
                 } else {
                     for (let i = 0; i < 3; i++) {
                         if (validEtas[i]) {
@@ -108,18 +107,18 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 通訊失敗: ${e.message}`);
+                addLog(`${item.route} 失敗: ${e.message}`);
                 html += `<div class="card ${item.type.toLowerCase()}-card" style="opacity:0.4">
-                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">重新連線中...</div></div>
+                            <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">通訊中...</div></div>
                          </div>`;
             }
         }
         document.getElementById('display').innerHTML = html;
-        addLog("刷新完成");
+        addLog("數據刷新完成");
     }
 
     updateUI();
-    setInterval(updateUI, 30000); // 30秒更新一次
+    setInterval(updateUI, 30000);
 </script>
 </body>
 </html>
