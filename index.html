@@ -29,7 +29,7 @@
 <body>
 
 <div class="header">
-    <span>🚍 BUS DISPLAY V8.1</span>
+    <span>🚍 BUS DISPLAY V8.2 (MULTI-PROXY)</span>
     <span id="update-time">--:--:--</span>
 </div>
 
@@ -52,6 +52,35 @@
         logBox.scrollTop = logBox.scrollHeight;
     }
 
+    // 🚀 多重代理請求函式
+    async function fetchWithProxy(targetUrl) {
+        const proxies = [
+            url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+            url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+        ];
+
+        for (let i = 0; i < proxies.length; i++) {
+            try {
+                const proxyUrl = proxies[i](targetUrl);
+                const res = await fetch(proxyUrl);
+                if (!res.ok) continue;
+
+                let data = await res.json();
+                
+                // 處理 allorigins 的特殊包裝
+                if (data.contents) {
+                    try { data = JSON.parse(data.contents); } catch(e) { continue; }
+                }
+
+                if (data && data.data) return data;
+            } catch (e) {
+                console.warn(`Proxy ${i} failed, trying next...`);
+            }
+        }
+        throw new Error("所有代理伺服器均失效");
+    }
+
     async function updateUI() {
         let html = '';
         const now = new Date();
@@ -60,27 +89,17 @@
         for (const item of SYNC_CONFIGS) {
             try {
                 let etas = [];
-                let url = "";
 
                 if (item.type === 'KMB') {
-                    url = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`;
-                    const res = await fetch(url);
+                    const res = await fetch(`https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stop_id}/${item.route}/1`);
                     const json = await res.json();
                     etas = (json.data || []).filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'CTB') {
-                    // 🚀 使用 corsproxy.io 強力代理
                     const target = `https://rt.data.gov.hk/v1/transport/citybus/eta/CTB/${item.stop_id}/${item.route}`;
-                    url = `https://corsproxy.io/?${encodeURIComponent(target)}`;
-                    
-                    const res = await fetch(url);
-                    const json = await res.json();
-                    
-                    if (json && json.data) {
-                        etas = json.data.filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
-                    }
+                    const json = await fetchWithProxy(target);
+                    etas = json.data.filter(d => d.dir === item.dir).slice(0, 3).map(d => ({ dest: d.dest_tc, time: d.eta }));
                 } else if (item.type === 'GMB') {
-                    url = `https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`;
-                    const res = await fetch(url);
+                    const res = await fetch(`https://data.etagmb.gov.hk/eta/route-stop/${item.route_id}/${item.stop_id}`);
                     const json = await res.json();
                     let rawData = (json.data && json.data.eta_res) ? json.data.eta_res : (Array.isArray(json.data) ? json.data : []);
                     etas = rawData.slice(0, 3).map(d => ({ dest: '高山道', time: d.timestamp || d.eta }));
@@ -110,14 +129,14 @@
                 }
                 html += `</div></div>`;
             } catch (e) { 
-                addLog(`${item.route} 代理請求失敗: ${e.message}`);
+                addLog(`${item.route} 獲取失敗: ${e.message}`);
                 html += `<div class="card ${item.type.toLowerCase()}-card" style="opacity:0.4">
                             <div class="info-section"><div class="route-num">${item.route}</div><div class="dest">城巴重試中...</div></div>
                          </div>`;
             }
         }
         document.getElementById('display').innerHTML = html;
-        addLog("刷新完成");
+        addLog("數據刷新完成");
     }
 
     updateUI();
